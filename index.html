@@ -2,14 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src *; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline'; img-src * data: blob:; connect-src *; font-src *; frame-src *;">
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Nearby Flyer — Airport Services Map</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <link href="https://api.mapbox.com/mapbox-gl-js/v3.9.4/mapbox-gl.css" rel="stylesheet">
-<script src="https://api.mapbox.com/mapbox-gl-js/v3.9.4/mapbox-gl.js"></script>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.9.4/mapbox-gl-csp.js"></script>
 
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
@@ -6275,6 +6274,7 @@ sb.auth.onAuthStateChange(async (event, session) => {
 });
 
 window.signOut = signOut;
+mapboxgl.workerUrl = 'https://api.mapbox.com/mapbox-gl-js/v3.9.4/mapbox-gl-csp-worker.js';
 initMap();
 setTimeout(() => {
   if(map && markers.length === 0 && !hasLiveAirportRows()) {
