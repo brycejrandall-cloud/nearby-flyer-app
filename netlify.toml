@@ -1,4 +1,0 @@
-[[headers]]
-  for = "/*"
-  [headers.values]
-    Content-Security-Policy = "default-src * blob: data: 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; worker-src https://api.mapbox.com blob:; child-src https://api.mapbox.com blob:; style-src * 'unsafe-inline'; img-src * data: blob:; connect-src *; font-src *;"
