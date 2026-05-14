@@ -1,0 +1,5282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Nearby Flyer — Airport Services Map</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.9.4/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.9.4/mapbox-gl.js"></script>
+
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --ink:#07111f;
+  --navy:#0b1729;
+  --panel:#ffffff;
+  --muted:#64748b;
+  --line:#dbe4ef;
+  --blue:#2563eb;
+  --blue2:#1d4ed8;
+  --sky:#38bdf8;
+  --green:#059669;
+  --orange:#f97316;
+  --purple:#7c3aed;
+  --gold:#f59e0b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:"Plus Jakarta Sans",system-ui,sans-serif;
+  background:
+    radial-gradient(circle at 16% 8%,rgba(56,189,248,.28),transparent 32%),
+    radial-gradient(circle at 88% 10%,rgba(37,99,235,.30),transparent 30%),
+    radial-gradient(circle at 55% 90%,rgba(14,165,233,.16),transparent 35%),
+    linear-gradient(180deg,#07111f 0%,#0b1b31 38%,#10233b 100%);
+  color:var(--ink);
+  min-height:100vh;
+}
+body:before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  background-image:
+    linear-gradient(rgba(15,23,42,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15,23,42,.035) 1px, transparent 1px);
+  background-size:42px 42px;
+  mask-image:linear-gradient(180deg,rgba(0,0,0,.75),transparent 75%);
+  z-index:-1;
+}
+button,input{font-family:inherit}
+.nav{
+  height:72px;
+  background:rgba(7,17,31,.88);
+  backdrop-filter:blur(22px);
+  border-bottom:1px solid rgba(255,255,255,.08);
+  position:sticky;
+  top:0;
+  z-index:1000;
+  box-shadow:0 18px 40px rgba(7,17,31,.18);
+}
+.nav-inner{
+  max-width:1240px;
+  margin:auto;
+  height:100%;
+  padding:0 22px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+.brand{display:flex;align-items:center;gap:12px}
+.logo{
+  width:44px;
+  height:44px;
+  border-radius:16px;
+  background:linear-gradient(135deg,var(--blue),var(--sky));
+  color:white;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:22px;
+  box-shadow:0 12px 28px rgba(37,99,235,.38);
+}
+.brand strong{display:block;font-size:19px;color:white;letter-spacing:-.4px}
+.brand span{display:block;color:#93a4ba;font-size:12px;font-weight:800}
+.btn{
+  border:0;
+  border-radius:999px;
+  padding:12px 18px;
+  font-weight:900;
+  cursor:pointer;
+  font-size:14px;
+  transition:.18s transform,.18s box-shadow,.18s background;
+}
+.btn:hover{transform:translateY(-1px)}
+.btn.primary{
+  background:linear-gradient(135deg,var(--blue),#3b82f6);
+  color:white;
+  box-shadow:0 12px 24px rgba(37,99,235,.22);
+}
+.btn.primary:hover{box-shadow:0 16px 32px rgba(37,99,235,.30)}
+.btn.ghost{background:rgba(255,255,255,.08);color:#dbeafe}
+.page{max-width:1240px;margin:auto;padding:28px 22px 78px}
+.hero{
+  display:grid;
+  grid-template-columns:.82fr 1.18fr;
+  gap:22px;
+  align-items:stretch;
+}
+.hero-copy,.map-wrap,.airport-board,.cta,.status-box{
+  background:rgba(241,248,255,.90);
+  border:1px solid rgba(148,189,232,.26);
+  border-radius:34px;
+  box-shadow:0 28px 70px rgba(2,8,23,.28);
+}
+.hero-copy{
+  position:relative;
+  overflow:hidden;
+  padding:38px;
+  background:
+    linear-gradient(180deg,rgba(236,247,255,.96),rgba(219,235,255,.86)),
+    radial-gradient(circle at 12% 0%,rgba(37,99,235,.26),transparent 36%);
+}
+.hero-copy:after{
+  content:"";
+  position:absolute;
+  right:-80px;
+  bottom:-90px;
+  width:240px;
+  height:240px;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(56,189,248,.28),transparent 65%);
+}
+.kicker{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  color:#1d4ed8;
+  font-size:12px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:2px;
+  background:#eff6ff;
+  border:1px solid #bfdbfe;
+  border-radius:999px;
+  padding:9px 12px;
+}
+.kicker:before{content:"✦";color:var(--gold)}
+h1{
+  position:relative;
+  z-index:1;
+  margin-top:18px;
+  font-size:54px;
+  line-height:.96;
+  letter-spacing:-2.5px;
+  font-weight:900;
+}
+.hero-copy p{
+  position:relative;
+  z-index:1;
+  margin-top:20px;
+  color:#475569;
+  font-size:18px;
+  line-height:1.68;
+  font-weight:650;
+}
+.search-card{
+  position:relative;
+  z-index:1;
+  margin-top:28px;
+  background:rgba(226,240,255,.78);
+  border:1px solid var(--line);
+  border-radius:26px;
+  padding:12px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.8);
+}
+.search-row{display:flex;gap:10px}
+.search-box{
+  flex:1;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  background:white;
+  border:1px solid var(--line);
+  border-radius:20px;
+  padding:0 14px;
+  box-shadow:0 8px 18px rgba(15,23,42,.04);
+}
+.search-box input{
+  width:100%;
+  height:52px;
+  border:0;
+  outline:0;
+  font-size:15px;
+  font-weight:800;
+  color:var(--ink);
+}
+.status-box{
+  position:relative;
+  z-index:1;
+  margin-top:18px;
+  padding:13px 15px;
+  color:#075985;
+  background:linear-gradient(135deg,#e0f2fe,#eff6ff);
+  border-color:#bae6fd;
+  font-size:13px;
+  font-weight:900;
+  line-height:1.5;
+}
+.map-wrap{
+  overflow:hidden;
+  background:#081223;
+  border-color:rgba(15,23,42,.12);
+}
+.map-top{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:18px 20px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+  background:
+    linear-gradient(135deg,rgba(7,17,31,.96),rgba(15,31,54,.94)),
+    radial-gradient(circle at 80% 0%,rgba(37,99,235,.35),transparent 30%);
+  color:white;
+}
+.map-top h2{font-size:21px;font-weight:900;letter-spacing:-.4px}
+.map-top p{color:#9fb2ca;font-size:13px;font-weight:800;margin-top:3px}
+#map{
+  height:520px;
+  width:100%;
+  background:#07111f;
+}
+.mapboxgl-canvas{filter:saturate(1.08) contrast(1.02)}
+.mapboxgl-ctrl-logo,.mapboxgl-ctrl-attrib{font-size:10px}
+.airport-marker{cursor:pointer}
+.airport-bubble{
+  min-width:132px;
+  background:rgba(255,255,255,.96);
+  border:2px solid transparent;
+  border-radius:20px;
+  padding:10px 12px;
+  box-shadow:0 18px 44px rgba(15,23,42,.30);
+  text-align:left;
+  transition:.18s transform,.18s border-color,.18s box-shadow;
+  backdrop-filter:blur(8px);
+  transform:scale(var(--marker-scale, 1));
+  transform-origin:bottom center;
+}
+.airport-marker:hover .airport-bubble{transform:translateY(-4px) scale(calc(var(--marker-scale, 1) * 1.04))}
+.airport-bubble.selected{
+  border-color:var(--blue);
+  box-shadow:0 0 0 6px rgba(37,99,235,.16),0 28px 58px rgba(15,23,42,.34);
+}
+.airport-code{font-weight:900;color:var(--blue);letter-spacing:1.5px;font-size:12px}
+.airport-name{
+  font-size:11px;
+  font-weight:900;
+  margin-top:3px;
+  color:#1e293b;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:132px;
+}
+.airport-counts{margin-top:7px;display:flex;flex-wrap:wrap;gap:4px}
+.count-pill{
+  font-size:9.5px;
+  font-weight:900;
+  padding:3px 6px;
+  border-radius:999px;
+  background:#f1f5f9;
+  color:#475569;
+}
+.count-pill.blue{background:#eff6ff;color:#1d4ed8}
+.count-pill.green{background:#ecfdf5;color:#047857}
+.count-pill.orange{background:#fff7ed;color:#c2410c}
+.count-pill.purple{background:#f5f3ff;color:#6d28d9}
+.airport-board{
+  margin-top:24px;
+  overflow:hidden;
+  background:rgba(236,247,255,.92);
+}
+.board-header{
+  padding:30px;
+  border-bottom:1px solid var(--line);
+  background:
+    radial-gradient(circle at 100% 0%,rgba(37,99,235,.22),transparent 30%),
+    linear-gradient(180deg,#f0f8ff,#e3f0ff);
+}
+.board-top{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}
+.board-code{
+  display:inline-flex;
+  color:#1d4ed8;
+  background:#eff6ff;
+  border:1px solid #bfdbfe;
+  border-radius:999px;
+  padding:7px 11px;
+  font-size:12px;
+  letter-spacing:2px;
+  font-weight:900;
+}
+.board-header h2{margin-top:12px;font-size:38px;letter-spacing:-1.5px}
+.board-header p{margin-top:8px;color:var(--muted);font-weight:800}
+.stat-row{display:none;gap:10px;flex-wrap:wrap;margin-top:20px}
+.stat{
+  background:white;
+  border:1px solid #edf2f7;
+  border-radius:20px;
+  padding:13px 16px;
+  box-shadow:0 8px 22px rgba(15,23,42,.045);
+}
+.stat strong{font-size:26px;margin-right:5px;color:#0f172a}
+.stat span{color:var(--muted);font-size:13px;font-weight:900}
+.tabs{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  padding:16px 24px;
+  background:#eaf3ff;
+  border-bottom:1px solid var(--line);
+}
+.tab{
+  border:1px solid var(--line);
+  background:white;
+  color:#475569;
+  border-radius:999px;
+  padding:11px 15px;
+  font-size:13px;
+  font-weight:900;
+  cursor:pointer;
+  transition:.16s transform,.16s background;
+}
+.tab:hover{transform:translateY(-1px);background:#eff6ff;color:#1d4ed8}
+.tab.active{background:linear-gradient(135deg,var(--blue),#3b82f6);color:white;border-color:var(--blue)}
+.board-content{padding:24px}
+.overview-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.overview-card{
+  position:relative;
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:28px;
+  padding:22px;
+  background:linear-gradient(180deg,#fff,#f8fafc);
+  box-shadow:0 14px 36px rgba(15,23,42,.06);
+}
+.overview-card::before{
+  content:"";
+  position:absolute;
+  inset:auto -40px -55px auto;
+  width:170px;
+  height:170px;
+  border-radius:999px;
+  opacity:.55;
+  filter:blur(2px);
+}
+.overview-card.summary{
+  background:linear-gradient(180deg,#f7fbff,#edf5ff);
+}
+.overview-card.summary::before{background:radial-gradient(circle,#93c5fd 0%, rgba(147,197,253,0) 70%)}
+.overview-card.services{
+  background:linear-gradient(180deg,#fffaf2,#fff4df);
+}
+.overview-card.services::before{background:radial-gradient(circle,#fdba74 0%, rgba(253,186,116,0) 70%)}
+.overview-card.available{
+  background:linear-gradient(180deg,#f8fffb,#ecfdf5);
+}
+.overview-card.available::before{background:radial-gradient(circle,#6ee7b7 0%, rgba(110,231,183,0) 70%)}
+.overview-card.nextstep{
+  background:linear-gradient(180deg,#f7f8ff,#eef2ff);
+}
+.overview-card.nextstep::before{background:radial-gradient(circle,#a5b4fc 0%, rgba(165,180,252,0) 70%)}
+.overview-topline{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:10px;
+  position:relative;
+  z-index:1;
+}
+.overview-icon{
+  width:42px;
+  height:42px;
+  border-radius:16px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:18px;
+  background:rgba(255,255,255,.76);
+  box-shadow:0 8px 18px rgba(15,23,42,.08);
+}
+.overview-kicker{
+  font-size:11px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:1px;
+  color:#64748b;
+}
+.overview-card h3{font-size:18px;font-weight:900;position:relative;z-index:1}
+.overview-card p{margin-top:9px;color:var(--muted);line-height:1.65;font-size:14px;font-weight:650;position:relative;z-index:1}
+.overview-accent{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:14px;
+  position:relative;
+  z-index:1;
+}
+.overview-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  border-radius:999px;
+  padding:8px 12px;
+  font-size:12px;
+  font-weight:900;
+  background:rgba(255,255,255,.78);
+  color:#334155;
+  border:1px solid rgba(148,163,184,.18);
+}
+.listing{
+  border:1px solid var(--line);
+  border-radius:28px;
+  overflow:hidden;
+  margin-bottom:18px;
+  background:linear-gradient(180deg,#fff,#f8fafc);
+  box-shadow:0 14px 36px rgba(15,23,42,.06);
+}
+.listing-visual{
+  position:relative;
+  min-height:170px;
+  overflow:hidden;
+  background:linear-gradient(135deg,#dbeafe,#eff6ff);
+}
+.listing-visual::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:linear-gradient(180deg,rgba(15,23,42,.08),rgba(15,23,42,.36));
+}
+.listing-visual img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+.visual-fallback{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:52px;
+  color:white;
+  font-weight:900;
+  letter-spacing:-1px;
+}
+.visual-fallback.cfi{background:linear-gradient(135deg,#2563eb,#38bdf8)}
+.visual-fallback.flight_school{background:linear-gradient(135deg,#7c3aed,#60a5fa)}
+.visual-fallback.rental_aircraft{background:linear-gradient(135deg,#0f766e,#14b8a6)}
+.visual-fallback.flying_club{background:linear-gradient(135deg,#9333ea,#ec4899)}
+.visual-fallback.maintenance{background:linear-gradient(135deg,#ea580c,#fb923c)}
+.listing-visual-badges{
+  position:absolute;
+  top:14px;
+  left:14px;
+  right:14px;
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  z-index:2;
+}
+.listing-visual-badge{
+  background:rgba(255,255,255,.88);
+  color:#0f172a;
+  border-radius:999px;
+  padding:8px 11px;
+  font-size:11px;
+  font-weight:900;
+  backdrop-filter:blur(10px);
+}
+.listing-visual-title{
+  position:absolute;
+  left:18px;
+  bottom:18px;
+  right:18px;
+  z-index:2;
+  color:white;
+}
+.listing-visual-title small{
+  display:block;
+  font-size:12px;
+  font-weight:800;
+  color:rgba(255,255,255,.88);
+  margin-bottom:6px;
+}
+.listing-visual-title strong{
+  display:block;
+  font-size:24px;
+  font-weight:900;
+  line-height:1.1;
+}
+.listing-body{
+  padding:22px;
+}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.chip{
+  background:#f1f5f9;
+  color:#475569;
+  border-radius:999px;
+  padding:7px 10px;
+  font-size:11px;
+  font-weight:900;
+}
+.chip.blue{background:#eff6ff;color:#1d4ed8}
+.chip.green{background:#ecfdf5;color:#047857}
+.listing h3{font-size:23px;font-weight:900;letter-spacing:-.5px}
+.meta{margin-top:5px;color:var(--muted);font-size:13px;font-weight:900}
+.desc{margin-top:13px;color:#475569;font-size:14px;line-height:1.65;font-weight:650}
+.quick-facts{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:14px;
+}
+
+.listing-highlights{
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  margin-top:16px;
+}
+.listing-highlight{
+  flex:1 1 220px;
+  min-width:180px;
+  border-radius:20px;
+  padding:14px 16px;
+  border:1px solid #cfe0ff;
+  background:linear-gradient(180deg,#f8fbff,#eef5ff);
+  box-shadow:0 10px 22px rgba(37,99,235,.08);
+}
+.listing-highlight.primary{
+  background:linear-gradient(135deg,#2563eb,#38bdf8);
+  border-color:rgba(37,99,235,.28);
+  color:white;
+}
+.listing-highlight .label{
+  display:block;
+  font-size:11px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.9px;
+  color:#64748b;
+}
+.listing-highlight.primary .label{color:rgba(255,255,255,.82)}
+.listing-highlight .value{
+  display:block;
+  margin-top:6px;
+  font-size:18px;
+  line-height:1.25;
+  font-weight:900;
+  color:#0f172a;
+}
+.listing-highlight.primary .value{color:white}
+.aircraft-rate-list{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:14px;
+  align-items:stretch;
+}
+.aircraft-rate-card{
+  flex:0 1 auto;
+  min-width:230px;
+  max-width:360px;
+  border:1px solid #bfdbfe;
+  background:linear-gradient(180deg,#f8fbff,#eef6ff);
+  border-radius:18px;
+  padding:12px 14px;
+  box-shadow:0 8px 20px rgba(37,99,235,.06);
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  grid-template-areas:
+    "name rate"
+    "meta rate";
+  column-gap:12px;
+  row-gap:2px;
+  align-items:center;
+}
+.aircraft-rate-card .plane-name{
+  grid-area:name;
+  display:block;
+  color:#0f172a;
+  font-size:15px;
+  font-weight:900;
+  line-height:1.18;
+  min-width:0;
+}
+.aircraft-rate-card .plane-meta{
+  grid-area:meta;
+  display:block;
+  margin-top:1px;
+  color:#64748b;
+  font-size:11px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.6px;
+  min-width:0;
+}
+.aircraft-rate-card .plane-rate{
+  grid-area:rate;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  margin-top:0;
+  border-radius:999px;
+  padding:8px 11px;
+  background:#2563eb;
+  color:white;
+  font-size:13px;
+  font-weight:900;
+  white-space:nowrap;
+}
+.aircraft-rate-card .plane-empty{
+  grid-area:rate;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  margin-top:0;
+  border-radius:999px;
+  padding:7px 10px;
+  background:#eff6ff;
+  color:#64748b;
+  font-size:12px;
+  font-weight:800;
+  white-space:nowrap;
+}
+
+@media (max-width: 720px){
+  .aircraft-rate-list{display:grid;grid-template-columns:1fr;}
+  .aircraft-rate-card{max-width:none;min-width:0;}
+}
+
+.hangar-aircraft-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:12px;
+}
+.hangar-aircraft-card{
+  overflow:hidden;
+  border:1px solid #dbe4ef;
+  border-radius:22px;
+  background:#f8fafc;
+}
+.hangar-aircraft-photo{
+  height:128px;
+  background:linear-gradient(135deg,#dbeafe,#bfdbfe);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#2563eb;
+  font-size:38px;
+  font-weight:900;
+}
+.hangar-aircraft-body{padding:14px}
+.hangar-aircraft-body strong{display:block;font-size:15px;color:#0f172a;line-height:1.25}
+.hangar-aircraft-body span{display:block;margin-top:5px;color:#64748b;font-size:12px;font-weight:850}
+.hangar-aircraft-body .plane-rate{margin-top:10px;display:inline-flex;border-radius:999px;padding:7px 10px;background:#eff6ff;color:#1d4ed8;font-size:12px;font-weight:900}
+.quick-fact{
+  background:#fff;
+  border:1px solid #dbe4ef;
+  color:#334155;
+  border-radius:16px;
+  padding:11px 12px;
+  min-width:130px;
+  flex:1 1 140px;
+}
+.quick-fact .label{
+  display:block;
+  font-size:11px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.8px;
+  color:#64748b;
+  margin-bottom:4px;
+}
+.quick-fact .value{
+  display:block;
+  font-size:14px;
+  font-weight:900;
+  color:#0f172a;
+}
+.actions{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.actions button{
+  border:1px solid var(--line);
+  background:white;
+  border-radius:16px;
+  padding:11px 14px;
+  font-weight:900;
+  cursor:pointer;
+}
+.actions button.primary{background:var(--blue);border-color:var(--blue);color:white}
+.empty{padding:30px;border:1px dashed #cbd5e1;border-radius:26px;text-align:center;color:#64748b;font-weight:800;background:#fff}
+.cta{
+  margin-top:24px;
+  background:
+    radial-gradient(circle at 100% 0%,rgba(56,189,248,.22),transparent 30%),
+    linear-gradient(135deg,#07111f,#0f2542);
+  color:white;
+  padding:30px;
+  display:flex;
+  justify-content:space-between;
+  gap:18px;
+  align-items:center;
+  border-color:rgba(255,255,255,.08);
+}
+.cta h2{font-size:30px;letter-spacing:-.8px}
+.cta p{margin-top:8px;color:#cbd5e1;line-height:1.65;font-weight:650}
+@media(max-width:1020px){
+  .hero{grid-template-columns:1fr}
+  #map{height:440px}
+  .board-top,.cta{display:block}
+  .cta button{margin-top:18px}
+}
+@media(max-width:720px){
+  .page{padding:16px 14px 50px}
+  .nav-actions{display:none}
+  .hero-copy{padding:26px}
+  h1{font-size:39px}
+  .search-row{flex-direction:column}
+  #map{height:540px}
+  .overview-grid{grid-template-columns:1fr}
+  .board-header h2{font-size:31px}
+}
+
+.user-location-marker{
+  width:30px;
+  height:30px;
+  border-radius:999px;
+  background:rgba(14,165,233,.18);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  pointer-events:none;
+}
+.user-location-dot{
+  width:16px;
+  height:16px;
+  border-radius:999px;
+  background:#0ea5e9;
+  border:4px solid white;
+  box-shadow:0 8px 20px rgba(2,8,23,.28);
+}
+.service-actions{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:10px;
+  margin-top:16px;
+}
+.service-action{
+  border:1px solid var(--line);
+  background:white;
+  border-radius:20px;
+  padding:14px 12px;
+  text-align:left;
+  cursor:pointer;
+  transition:.16s transform,.16s border-color,.16s background;
+}
+.service-action:hover{
+  transform:translateY(-2px);
+  border-color:#93c5fd;
+  background:#eff6ff;
+}
+.service-action strong{
+  display:block;
+  font-size:18px;
+  color:#0f172a;
+}
+.service-action span{
+  display:block;
+  margin-top:3px;
+  font-size:12px;
+  color:#64748b;
+  font-weight:900;
+}
+.next-steps{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:12px;
+  margin-top:16px;
+}
+.next-step{
+  background:#f8fafc;
+  border:1px solid #e2e8f0;
+  border-radius:22px;
+  padding:16px;
+}
+.next-step b{
+  display:block;
+  font-size:14px;
+  color:#0f172a;
+}
+.next-step p{
+  margin-top:7px;
+  font-size:13px;
+  color:#64748b;
+  line-height:1.5;
+  font-weight:650;
+}
+@media(max-width:720px){
+  .service-actions,.next-steps{grid-template-columns:1fr}
+}
+
+
+.listing-page{
+  position:fixed;
+  inset:0;
+  z-index:3000;
+  background:rgba(7,17,31,.82);
+  backdrop-filter:blur(14px);
+  display:none;
+  overflow:auto;
+  padding:26px;
+}
+.listing-page.open{display:block}
+.listing-page-shell{
+  max-width:1180px;
+  margin:0 auto;
+  background:#eef7ff;
+  border:1px solid rgba(255,255,255,.24);
+  border-radius:34px;
+  overflow:hidden;
+  box-shadow:0 35px 90px rgba(0,0,0,.45);
+}
+.listing-hero{
+  position:relative;
+  min-height:320px;
+  background:
+    radial-gradient(circle at 20% 10%,rgba(56,189,248,.30),transparent 34%),
+    linear-gradient(135deg,#07111f,#12345a);
+  color:white;
+  padding:30px;
+  display:flex;
+  flex-direction:column;
+  justify-content:flex-end;
+}
+.listing-close{
+  position:absolute;
+  top:20px;
+  right:20px;
+  z-index:6;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  min-height:44px;
+  padding:0 14px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.22);
+  background:rgba(7,17,31,.48);
+  color:white;
+  font-size:14px;
+  font-weight:900;
+  cursor:pointer;
+  backdrop-filter:blur(10px);
+  box-shadow:0 10px 24px rgba(2,8,23,.22);
+}
+.listing-close:hover{
+  background:rgba(15,23,42,.75);
+}
+.listing-close .close-x{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:24px;
+  height:24px;
+  border-radius:999px;
+  background:rgba(255,255,255,.12);
+  font-size:16px;
+  line-height:1;
+}
+.listing-photo-strip{
+  position:absolute;
+  inset:0;
+  display:grid;
+  grid-template-columns:1.3fr .7fr;
+  opacity:.34;
+  pointer-events:none;
+}
+.listing-photo-strip img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.listing-hero::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:linear-gradient(180deg, rgba(7,17,31,.20) 0%, rgba(7,17,31,.32) 35%, rgba(7,17,31,.72) 100%);
+  z-index:1;
+}
+.listing-hero-content{
+  position:relative;
+  z-index:3;
+  max-width:760px;
+}
+.listing-identity{
+  display:flex;
+  align-items:flex-end;
+  gap:18px;
+  margin-bottom:16px;
+}
+.listing-avatar{
+  width:88px;
+  height:88px;
+  border-radius:24px;
+  overflow:hidden;
+  flex:0 0 auto;
+  border:3px solid rgba(255,255,255,.95);
+  box-shadow:0 18px 40px rgba(2,8,23,.28);
+  background:linear-gradient(135deg,#1d4ed8,#38bdf8);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:white;
+  font-size:30px;
+  font-weight:900;
+}
+.listing-avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.listing-name-wrap{
+  min-width:0;
+}
+.listing-name-wrap h2{
+  margin:0;
+}
+.listing-name-wrap p{
+  margin-top:10px;
+}
+
+.detail-chip-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-bottom:14px;
+}
+.detail-chip{
+  background:rgba(255,255,255,.14);
+  border:1px solid rgba(255,255,255,.18);
+  color:white;
+  border-radius:999px;
+  padding:7px 11px;
+  font-size:12px;
+  font-weight:900;
+}
+.listing-hero h2{
+  font-size:44px;
+  line-height:1;
+  letter-spacing:-1.6px;
+}
+.listing-hero p{
+  margin-top:12px;
+  color:#cbd5e1;
+  font-weight:750;
+  line-height:1.6;
+}
+.detail-body{
+  padding:24px;
+  display:grid;
+  grid-template-columns:1.15fr .85fr;
+  gap:20px;
+}
+.detail-card{
+  background:white;
+  border:1px solid #dbe4ef;
+  border-radius:26px;
+  padding:22px;
+  box-shadow:0 12px 30px rgba(15,23,42,.06);
+}
+.detail-card h3{
+  font-size:18px;
+  font-weight:900;
+  margin-bottom:12px;
+}
+.detail-grid{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:10px;
+}
+.detail-item{
+  background:#f8fafc;
+  border:1px solid #e2e8f0;
+  border-radius:18px;
+  padding:13px;
+}
+.detail-item span{
+  display:block;
+  font-size:11px;
+  color:#64748b;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.7px;
+}
+.detail-item strong{
+  display:block;
+  margin-top:5px;
+  font-size:14px;
+  color:#0f172a;
+  line-height:1.35;
+}
+.photo-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+}
+.photo-tile{
+  aspect-ratio:4/3;
+  border-radius:18px;
+  overflow:hidden;
+  background:#e2e8f0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#64748b;
+  font-size:28px;
+  font-weight:900;
+}
+.photo-tile img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.detail-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:16px;
+}
+.detail-actions button{
+  border:1px solid #dbe4ef;
+  background:white;
+  border-radius:16px;
+  padding:12px 15px;
+  font-weight:900;
+  cursor:pointer;
+}
+.detail-actions button.primary{
+  background:#2563eb;
+  color:white;
+  border-color:#2563eb;
+}
+.detail-note{
+  margin-top:12px;
+  color:#64748b;
+  font-size:13px;
+  line-height:1.6;
+  font-weight:650;
+}
+@media(max-width:900px){
+  .listing-page{padding:10px}
+  .detail-body{grid-template-columns:1fr}
+  .listing-hero h2{font-size:34px}
+  .photo-grid{grid-template-columns:1fr 1fr}
+  .listing-identity{align-items:center}
+  .listing-avatar{width:72px;height:72px;border-radius:20px;font-size:24px}
+  .listing-close{top:14px;right:14px}
+}
+
+
+/* ===== MVP MODALS: SUBMIT / CLAIM / ADMIN ===== */
+.mvp-modal{
+  position:fixed;
+  inset:0;
+  z-index:4000;
+  display:none;
+  background:rgba(7,17,31,.84);
+  backdrop-filter:blur(14px);
+  overflow:auto;
+  padding:24px;
+}
+.mvp-modal.open{display:block}
+.mvp-shell{
+  max-width:1040px;
+  margin:0 auto;
+  background:#eef7ff;
+  border:1px solid rgba(255,255,255,.28);
+  border-radius:34px;
+  overflow:hidden;
+  box-shadow:0 35px 90px rgba(0,0,0,.46);
+}
+.mvp-head{
+  position:relative;
+  color:white;
+  padding:30px;
+  background:
+    radial-gradient(circle at 100% 0%,rgba(56,189,248,.26),transparent 30%),
+    linear-gradient(135deg,#07111f,#12345a);
+}
+.mvp-head h2{font-size:38px;line-height:1;letter-spacing:-1.4px}
+.mvp-head p{margin-top:10px;color:#cbd5e1;line-height:1.6;font-weight:650}
+.mvp-close{
+  position:absolute;
+  top:18px;
+  right:18px;
+  width:42px;
+  height:42px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.18);
+  background:rgba(255,255,255,.12);
+  color:white;
+  font-size:22px;
+  cursor:pointer;
+}
+.mvp-body{padding:24px}
+.type-picker{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:10px;
+  margin-bottom:20px;
+}
+.type-card{
+  border:1px solid #dbe4ef;
+  background:white;
+  border-radius:20px;
+  padding:14px;
+  cursor:pointer;
+  text-align:left;
+  transition:.16s transform,.16s border-color,.16s background;
+}
+.type-card:hover{transform:translateY(-2px);border-color:#93c5fd;background:#eff6ff}
+.type-card.active{border-color:#2563eb;background:#eff6ff;box-shadow:0 0 0 4px rgba(37,99,235,.12)}
+.type-card b{display:block;font-size:14px}
+.type-card span{display:block;margin-top:4px;color:#64748b;font-size:12px;font-weight:750;line-height:1.35}
+.form-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:14px;
+}
+.form-field{margin-bottom:14px}
+.form-field label{
+  display:block;
+  font-size:11px;
+  font-weight:900;
+  color:#64748b;
+  text-transform:uppercase;
+  letter-spacing:.8px;
+  margin-bottom:7px;
+}
+.form-field input,.form-field select,.form-field textarea{
+  width:100%;
+  border:1px solid #dbe4ef;
+  border-radius:16px;
+  padding:13px 14px;
+  font-weight:750;
+  outline:none;
+  background:white;
+}
+.form-field textarea{min-height:110px;resize:vertical}
+.form-note{
+  background:#eff6ff;
+  color:#1d4ed8;
+  border:1px solid #bfdbfe;
+  border-radius:18px;
+  padding:13px 14px;
+  font-size:13px;
+  font-weight:800;
+  line-height:1.5;
+  margin-bottom:16px;
+}
+.photo-upload{
+  border:1px dashed #93c5fd;
+  background:#f8fbff;
+  border-radius:22px;
+  padding:18px;
+}
+.photo-preview{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:10px;
+  margin-top:12px;
+}
+.photo-preview img{
+  width:100%;
+  aspect-ratio:4/3;
+  object-fit:cover;
+  border-radius:14px;
+  border:1px solid #dbe4ef;
+}
+.mvp-status{
+  margin-top:14px;
+  border-radius:16px;
+  padding:12px 14px;
+  background:#f8fafc;
+  color:#475569;
+  font-size:13px;
+  font-weight:800;
+  line-height:1.5;
+}
+.admin-grid{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:14px;
+}
+.admin-card{
+  background:white;
+  border:1px solid #dbe4ef;
+  border-radius:22px;
+  padding:18px;
+}
+.admin-card h3{font-size:18px;font-weight:900}
+.admin-card p{margin-top:8px;color:#64748b;font-weight:650;line-height:1.5}
+.admin-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:12px;
+}
+.admin-pill{
+  background:#f1f5f9;
+  color:#475569;
+  border-radius:999px;
+  padding:6px 10px;
+  font-size:11px;
+  font-weight:900;
+}
+@media(max-width:850px){
+  .type-picker{grid-template-columns:1fr 1fr}
+  .form-grid{grid-template-columns:1fr}
+  .photo-preview{grid-template-columns:1fr 1fr}
+}
+
+
+.required-star{color:#dc2626;font-weight:900}
+.aircraft-select-box{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:8px;
+}
+.selected-aircraft-list{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:10px;
+}
+.selected-aircraft-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  background:#eff6ff;
+  color:#1d4ed8;
+  border:1px solid #bfdbfe;
+  border-radius:999px;
+  padding:7px 10px;
+  font-size:12px;
+  font-weight:900;
+}
+.selected-aircraft-chip button{
+  border:0;
+  background:transparent;
+  color:#1d4ed8;
+  font-weight:900;
+  cursor:pointer;
+}
+.form-section-title{
+  margin:20px 0 10px;
+  font-size:13px;
+  font-weight:900;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  color:#2563eb;
+}
+
+
+.aircraft-search-wrap{
+  position:relative;
+}
+.aircraft-search-results{
+  position:absolute;
+  z-index:20;
+  top:calc(100% + 6px);
+  left:0;
+  right:0;
+  max-height:240px;
+  overflow:auto;
+  background:white;
+  border:1px solid #dbe4ef;
+  border-radius:16px;
+  box-shadow:0 18px 44px rgba(15,23,42,.18);
+  display:none;
+}
+.aircraft-search-results.open{display:block}
+.aircraft-search-option{
+  width:100%;
+  border:0;
+  background:white;
+  text-align:left;
+  padding:11px 13px;
+  cursor:pointer;
+  border-bottom:1px solid #f1f5f9;
+}
+.aircraft-search-option:hover{background:#eff6ff}
+.aircraft-search-option b{
+  display:block;
+  font-size:13px;
+  color:#0f172a;
+}
+.aircraft-search-option span{
+  display:block;
+  margin-top:2px;
+  font-size:11px;
+  color:#64748b;
+  font-weight:800;
+}
+.aircraft-select-box{grid-template-columns:1fr}
+
+
+.board-helper{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  flex-wrap:wrap;
+  margin-bottom:18px;
+  padding:18px;
+  border-radius:24px;
+  background:linear-gradient(135deg,#eff6ff,#f8fbff);
+  border:1px solid #bfdbfe;
+}
+.board-helper strong{
+  display:block;
+  font-size:17px;
+  font-weight:900;
+  color:#0f172a;
+}
+.board-helper span{
+  display:block;
+  margin-top:4px;
+  color:#64748b;
+  font-size:13px;
+  font-weight:700;
+}
+.auth-tabs{
+  display:flex;
+  gap:8px;
+  margin-bottom:18px;
+}
+.auth-tabs button{
+  border:1px solid #dbe4ef;
+  background:white;
+  border-radius:999px;
+  padding:10px 14px;
+  font-weight:900;
+  cursor:pointer;
+}
+.auth-tabs button.active{
+  background:#2563eb;
+  color:white;
+  border-color:#2563eb;
+}
+.profile-hero{
+  display:flex;
+  gap:16px;
+  align-items:center;
+  margin-bottom:18px;
+}
+.profile-avatar{
+  width:92px;
+  height:92px;
+  border-radius:28px;
+  background:linear-gradient(135deg,#2563eb,#38bdf8);
+  color:white;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:32px;
+  font-weight:900;
+  overflow:hidden;
+  border:4px solid white;
+  box-shadow:0 16px 34px rgba(15,23,42,.16);
+}
+.profile-avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.profile-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-top:16px;
+}
+
+
+/* ===== Cleaner digestible airport overview ===== */
+.board-helper.compact{
+  background:linear-gradient(135deg,#f8fbff,#eff6ff);
+  border:1px solid #bfdbfe;
+  box-shadow:0 10px 26px rgba(37,99,235,.06);
+}
+.service-count-strip{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:10px;
+  margin:0 0 18px;
+}
+.service-count-card{
+  border:1px solid #dbe4ef;
+  background:rgba(255,255,255,.86);
+  border-radius:22px;
+  padding:16px;
+  cursor:pointer;
+  transition:.16s transform,.16s border-color,.16s box-shadow;
+}
+.service-count-card:hover{
+  transform:translateY(-2px);
+  border-color:#93c5fd;
+  box-shadow:0 12px 28px rgba(37,99,235,.10);
+}
+.service-count-card strong{
+  display:block;
+  font-size:30px;
+  line-height:1;
+  letter-spacing:-1px;
+  color:#0f172a;
+}
+.service-count-card span{
+  display:block;
+  margin-top:7px;
+  color:#64748b;
+  font-size:13px;
+  font-weight:900;
+}
+.airport-overview-simple{
+  display:grid;
+  grid-template-columns:1.15fr .85fr;
+  gap:16px;
+}
+.airport-summary-feature{
+  position:relative;
+  overflow:hidden;
+  border-radius:30px;
+  padding:26px;
+  border:1px solid #dbeafe;
+  background:
+    radial-gradient(circle at 100% 0%,rgba(37,99,235,.16),transparent 30%),
+    linear-gradient(180deg,#ffffff,#f3f8ff);
+  box-shadow:0 16px 38px rgba(15,23,42,.06);
+}
+.airport-summary-feature:before{
+  content:"";
+  position:absolute;
+  right:-80px;
+  bottom:-80px;
+  width:210px;
+  height:210px;
+  border-radius:999px;
+  background:radial-gradient(circle,rgba(56,189,248,.24),transparent 65%);
+}
+.airport-summary-feature h3{
+  font-size:28px;
+  letter-spacing:-.8px;
+  line-height:1.05;
+}
+.airport-summary-feature p{
+  margin-top:12px;
+  max-width:720px;
+  font-size:16px;
+  line-height:1.65;
+  color:#475569;
+  font-weight:700;
+}
+.overview-mini-grid{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:12px;
+}
+.overview-mini-card{
+  border:1px solid #dbe4ef;
+  background:white;
+  border-radius:24px;
+  padding:18px;
+  box-shadow:0 10px 24px rgba(15,23,42,.045);
+}
+.overview-mini-top{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:8px;
+}
+.overview-mini-icon{
+  width:38px;
+  height:38px;
+  border-radius:15px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#eff6ff;
+  font-size:18px;
+}
+.overview-mini-card h4{
+  font-size:15px;
+  font-weight:900;
+}
+.overview-mini-card p{
+  color:#64748b;
+  font-size:13px;
+  line-height:1.55;
+  font-weight:700;
+}
+.overview-source-row{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:18px;
+  position:relative;
+  z-index:1;
+}
+.overview-source-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  background:rgba(255,255,255,.78);
+  border:1px solid #dbe4ef;
+  border-radius:999px;
+  padding:9px 12px;
+  color:#334155;
+  font-size:12px;
+  font-weight:900;
+}
+@media(max-width:900px){
+  .service-count-strip{grid-template-columns:repeat(2,1fr)}
+  .airport-overview-simple{grid-template-columns:1fr}
+}
+@media(max-width:560px){
+  .service-count-strip{grid-template-columns:1fr}
+}
+
+
+.tab-count{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:24px;
+  height:24px;
+  padding:0 7px;
+  margin-left:8px;
+  border-radius:999px;
+  background:#f1f5f9;
+  color:#475569;
+  font-size:12px;
+  font-weight:900;
+}
+.tab.active .tab-count{
+  background:rgba(255,255,255,.22);
+  color:white;
+}
+
+
+.auth-method-toggle{
+  display:flex;
+  gap:8px;
+  margin-bottom:16px;
+  flex-wrap:wrap;
+}
+.auth-method-toggle button{
+  border:1px solid #dbe4ef;
+  background:white;
+  border-radius:999px;
+  padding:10px 14px;
+  font-weight:900;
+  cursor:pointer;
+}
+.auth-method-toggle button.active{
+  background:#0f172a;
+  color:white;
+  border-color:#0f172a;
+}
+.otp-row{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:10px;
+}
+@media(max-width:640px){
+  .otp-row{grid-template-columns:1fr}
+}
+
+
+.auth-simple-actions{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:4px;
+}
+.auth-split-note{
+  margin-bottom:16px;
+  color:#64748b;
+  font-size:14px;
+  font-weight:700;
+}
+.phone-code-section{
+  margin-top:14px;
+  padding-top:14px;
+  border-top:1px solid #dbe4ef;
+}
+
+
+.home-filter-panel{
+  margin-top:12px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+.home-filter-field{
+  background:white;
+  border:1px solid var(--line);
+  border-radius:18px;
+  padding:10px 12px;
+}
+.home-filter-field label{
+  display:block;
+  font-size:10px;
+  font-weight:900;
+  color:#64748b;
+  text-transform:uppercase;
+  letter-spacing:.9px;
+  margin-bottom:6px;
+}
+.home-filter-field select,
+.home-filter-field input{
+  width:100%;
+  border:0;
+  outline:0;
+  font-weight:850;
+  color:#0f172a;
+  background:transparent;
+}
+.home-filter-actions{
+  margin-top:12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.filter-check{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  color:#475569;
+  font-size:13px;
+  font-weight:850;
+}
+.filter-check input{
+  width:16px;
+  height:16px;
+}
+.filter-summary{
+  margin-top:10px;
+  color:#64748b;
+  font-size:12px;
+  line-height:1.45;
+  font-weight:800;
+}
+@media(max-width:720px){
+  .home-filter-panel{grid-template-columns:1fr}
+}
+
+
+/* ===== Slimmer map header ===== */
+.map-wrap{
+  border-radius:30px;
+  overflow:hidden;
+}
+.map-top{
+  padding:16px 18px;
+  min-height:auto;
+  gap:14px;
+}
+.map-top h2{
+  font-size:24px;
+  line-height:1.1;
+}
+.map-top p{
+  font-size:14px;
+  line-height:1.35;
+  max-width:540px;
+}
+.map-icon-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex:0 0 auto;
+}
+.icon-btn{
+  width:46px;
+  height:46px;
+  border:0;
+  border-radius:16px;
+  background:rgba(255,255,255,.10);
+  color:white;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  font-size:20px;
+  font-weight:900;
+  transition:.16s transform,.16s background;
+}
+.icon-btn:hover{
+  transform:translateY(-1px);
+  background:rgba(255,255,255,.18);
+}
+.icon-btn span{
+  line-height:1;
+}
+@media(max-width:720px){
+  .map-top{
+    align-items:flex-start;
+  }
+  .map-top h2{font-size:21px}
+  .map-top p{font-size:13px}
+  .icon-btn{width:42px;height:42px;border-radius:14px}
+}
+
+
+/* ===== Aircraft searchable dropdown ===== */
+.aircraft-search-wrap{
+  position:relative;
+}
+.aircraft-search-results{
+  position:absolute;
+  top:100%;
+  left:0;
+  right:0;
+  margin-top:8px;
+  background:white;
+  border:1px solid #dbe4ef;
+  border-radius:18px;
+  box-shadow:0 18px 40px rgba(15,23,42,.14);
+  max-height:260px;
+  overflow:auto;
+  z-index:30;
+  display:none;
+}
+.aircraft-search-results.open{
+  display:block;
+}
+.aircraft-option{
+  padding:12px 14px;
+  cursor:pointer;
+  font-weight:850;
+  color:#0f172a;
+  border-bottom:1px solid #eef2f7;
+}
+.aircraft-option:last-child{
+  border-bottom:0;
+}
+.aircraft-option:hover{
+  background:#eff6ff;
+}
+
+
+/* ===== Conservative bottom-strip cleanup for Mapbox frame ===== */
+.map-wrap{
+  overflow:hidden;
+  background:#081223;
+}
+#map{
+  background:#dbeafe;
+}
+.mapboxgl-ctrl-bottom-left,
+.mapboxgl-ctrl-bottom-right{
+  margin-bottom:6px;
+}
+.mapboxgl-ctrl-attrib{
+  background:rgba(255,255,255,.72) !important;
+  color:#334155 !important;
+  border-radius:8px;
+  padding:2px 6px !important;
+}
+.mapboxgl-ctrl-attrib a{
+  color:#334155 !important;
+}
+
+
+
+/* ===== Expanded Mapbox frame =====
+   Let the live Mapbox canvas take up more vertical space instead of using
+   a filler background at the bottom of the rounded frame. */
+.map-wrap{
+  background:#081223 !important;
+  line-height:0;
+}
+.map-top{
+  line-height:normal;
+}
+#map{
+  position:relative;
+  display:block;
+  overflow:hidden;
+  height:620px !important;
+  min-height:620px;
+  background:#081223 !important;
+  line-height:normal;
+}
+.mapboxgl-map,
+.mapboxgl-canvas-container,
+.mapboxgl-canvas{
+  display:block;
+}
+.mapboxgl-canvas{
+  width:100% !important;
+  height:100% !important;
+}
+.mapboxgl-control-container{
+  line-height:normal;
+}
+@media(max-width:1020px){
+  #map{height:560px !important;min-height:560px}
+}
+@media(max-width:720px){
+  #map{height:620px !important;min-height:620px}
+}
+.mapboxgl-ctrl-bottom-left,
+.mapboxgl-ctrl-bottom-right{
+  bottom:8px !important;
+  margin-bottom:0 !important;
+}
+
+
+/* ===== Full-bleed Mapbox bubble fill =====
+   Overscan the actual Mapbox canvas inside the rounded map card, then clip it.
+   This removes the leftover bottom strip without using a fake grey/background fill. */
+.map-wrap{
+  position:relative;
+  overflow:hidden !important;
+  background:#081223 !important;
+}
+#map{
+  position:relative;
+  display:block;
+  height:660px !important;
+  min-height:660px !important;
+  margin-bottom:-34px;
+  padding-bottom:34px;
+  overflow:hidden !important;
+  background:#081223 !important;
+}
+#map .mapboxgl-canvas-container,
+#map .mapboxgl-canvas{
+  min-height:694px !important;
+}
+#map .mapboxgl-canvas{
+  width:100% !important;
+  height:694px !important;
+}
+#map .mapboxgl-control-container{
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+}
+#map .mapboxgl-ctrl-top-left,
+#map .mapboxgl-ctrl-top-right,
+#map .mapboxgl-ctrl-bottom-left,
+#map .mapboxgl-ctrl-bottom-right{
+  pointer-events:auto;
+}
+#map .mapboxgl-ctrl-bottom-left,
+#map .mapboxgl-ctrl-bottom-right{
+  bottom:42px !important;
+}
+@media(max-width:1020px){
+  #map{height:600px !important;min-height:600px !important;margin-bottom:-34px;padding-bottom:34px}
+  #map .mapboxgl-canvas-container,#map .mapboxgl-canvas{min-height:634px !important}
+  #map .mapboxgl-canvas{height:634px !important}
+}
+@media(max-width:720px){
+  #map{height:660px !important;min-height:660px !important;margin-bottom:-34px;padding-bottom:34px}
+  #map .mapboxgl-canvas-container,#map .mapboxgl-canvas{min-height:694px !important}
+  #map .mapboxgl-canvas{height:694px !important}
+}
+
+
+
+/* ===== Final small Mapbox bubble-fill nudge =====
+   Slightly overscan the live Mapbox surface past the rounded card edge so
+   no bottom strip remains visible. */
+.map-wrap{
+  overflow:hidden !important;
+  background:#081223 !important;
+}
+#map{
+  height:690px !important;
+  min-height:690px !important;
+  margin-bottom:-72px !important;
+  padding-bottom:72px !important;
+  overflow:hidden !important;
+  background:#081223 !important;
+}
+#map .mapboxgl-canvas-container{
+  position:absolute !important;
+  inset:-12px 0 -92px 0 !important;
+  width:100% !important;
+  height:auto !important;
+  min-height:774px !important;
+}
+#map .mapboxgl-canvas{
+  position:absolute !important;
+  top:0 !important;
+  left:0 !important;
+  width:100% !important;
+  height:774px !important;
+  min-height:774px !important;
+}
+#map .mapboxgl-ctrl-bottom-left,
+#map .mapboxgl-ctrl-bottom-right{
+  bottom:82px !important;
+}
+@media(max-width:1020px){
+  #map{height:630px !important;min-height:630px !important;margin-bottom:-72px !important;padding-bottom:72px !important}
+  #map .mapboxgl-canvas-container,#map .mapboxgl-canvas{min-height:714px !important;height:714px !important}
+}
+@media(max-width:720px){
+  #map{height:690px !important;min-height:690px !important;margin-bottom:-72px !important;padding-bottom:72px !important}
+  #map .mapboxgl-canvas-container,#map .mapboxgl-canvas{min-height:774px !important;height:774px !important}
+}
+
+
+
+
+/* ===== Final seamless dashboard hero ===== */
+@media (min-width:1021px){
+  .nav{height:64px !important;}
+  .logo{width:38px !important;height:38px !important;border-radius:14px !important;font-size:19px !important;}
+  .brand strong{font-size:17px !important;}
+  .brand span{font-size:11px !important;}
+  .page{max-width:1320px !important;padding:20px 18px 58px !important;}
+
+  .hero{
+    display:grid !important;
+    grid-template-columns:39% 61% !important;
+    gap:0 !important;
+    align-items:stretch !important;
+    min-height:560px !important;
+    border-radius:36px !important;
+    overflow:hidden !important;
+    background:linear-gradient(135deg,#eaf6ff 0%,#dcedff 38%,#07111f 38.1%,#08162a 100%) !important;
+    border:1px solid rgba(191,219,254,.36) !important;
+    box-shadow:0 30px 76px rgba(2,8,23,.34) !important;
+  }
+
+  .hero-copy,
+  .map-wrap{
+    box-shadow:none !important;
+    border:0 !important;
+    border-radius:0 !important;
+    min-height:560px !important;
+  }
+
+  .hero-copy{
+    display:flex !important;
+    flex-direction:column !important;
+    justify-content:center !important;
+    padding:28px 32px !important;
+    overflow:hidden !important;
+    background:
+      radial-gradient(circle at 12% 4%,rgba(255,255,255,.78),transparent 42%),
+      linear-gradient(180deg,rgba(242,249,255,.94),rgba(214,231,249,.88)) !important;
+  }
+  .hero-copy:after{display:none !important;}
+  .kicker{font-size:10.5px !important;letter-spacing:1.7px !important;padding:7px 11px !important;align-self:flex-start !important;}
+  h1{font-size:43px !important;line-height:.98 !important;letter-spacing:-2.1px !important;margin-top:16px !important;}
+  .hero-copy p{font-size:15.5px !important;line-height:1.48 !important;margin-top:14px !important;max-width:440px !important;}
+
+  .search-card{
+    margin-top:20px !important;
+    padding:10px !important;
+    border-radius:24px !important;
+    background:rgba(222,238,255,.78) !important;
+    border:1px solid rgba(255,255,255,.62) !important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.74) !important;
+  }
+  .search-row{gap:8px !important;}
+  .search-box{border-radius:18px !important;padding:0 12px !important;min-width:0 !important;}
+  .search-box input{height:45px !important;font-size:13.5px !important;}
+  .search-row .btn{padding:10px 17px !important;font-size:13.5px !important;}
+  .home-filter-panel{grid-template-columns:1fr 1fr !important;gap:8px !important;margin-top:9px !important;}
+  .home-filter-field{padding:8px 10px !important;border-radius:16px !important;min-width:0 !important;}
+  .home-filter-field label{font-size:9.5px !important;margin-bottom:5px !important;}
+  .home-filter-field select,.home-filter-field input{font-size:12.5px !important;white-space:nowrap !important;overflow:hidden !important;text-overflow:ellipsis !important;}
+  .home-filter-actions{margin-top:9px !important;align-items:center !important;}
+  .filter-check{font-size:12.5px !important;}
+  .filter-summary{font-size:11.5px !important;margin-top:8px !important;}
+  .status-box{margin-top:16px !important;padding:10px 14px !important;font-size:12.5px !important;line-height:1.35 !important;border-radius:20px !important;}
+
+  .map-wrap{
+    display:flex !important;
+    flex-direction:column !important;
+    background:#07111f !important;
+    overflow:hidden !important;
+  }
+  .map-top{
+    flex:0 0 auto !important;
+    min-height:82px !important;
+    padding:17px 20px !important;
+    border-bottom:1px solid rgba(255,255,255,.10) !important;
+    background:linear-gradient(135deg,#07111f,#0b1b31) !important;
+  }
+  .map-top h2{font-size:25px !important;line-height:1.05 !important;}
+  .map-top p{font-size:13.5px !important;line-height:1.25 !important;}
+  .icon-btn{width:42px !important;height:42px !important;border-radius:15px !important;}
+
+  #map{
+    flex:1 1 auto !important;
+    height:auto !important;
+    min-height:478px !important;
+    position:relative !important;
+    overflow:hidden !important;
+    background:#07111f !important;
+  }
+  #map .mapboxgl-canvas-container,
+  #map .mapboxgl-canvas{
+    position:absolute !important;
+    inset:0 !important;
+    width:100% !important;
+    height:100% !important;
+    min-height:100% !important;
+  }
+  #map .mapboxgl-ctrl-bottom-left{bottom:10px !important;left:10px !important;}
+  #map .mapboxgl-ctrl-bottom-right{bottom:10px !important;right:10px !important;}
+  .airport-bubble{min-width:124px !important;padding:9px 11px !important;border-radius:18px !important;}
+  .airport-code{font-size:11.5px !important;}
+  .airport-name{font-size:10.5px !important;}
+  .count-pill{font-size:9px !important;}
+
+  .airport-board{margin-top:22px !important;border-radius:30px !important;}
+}
+
+@media (max-width:1020px){
+  .hero{grid-template-columns:1fr !important;gap:14px !important;}
+  .hero-copy,.map-wrap{border-radius:28px !important;}
+  #map{height:460px !important;}
+}
+
+
+/* ===== Joined dashboard polish: cleaner copy + smoother left/map connection ===== */
+@media (min-width:1021px){
+  .hero{
+    grid-template-columns:38.5% 61.5% !important;
+    min-height:550px !important;
+    position:relative !important;
+    background:linear-gradient(135deg,#eaf6ff 0%,#dceeff 36%,#c8ddf3 38.5%,#07111f 38.55%,#08162a 100%) !important;
+    isolation:isolate !important;
+  }
+  .hero::before{
+    content:"";
+    position:absolute;
+    top:0;
+    bottom:0;
+    left:calc(38.5% - 80px);
+    width:160px;
+    pointer-events:none;
+    background:linear-gradient(90deg,rgba(226,241,255,.72),rgba(226,241,255,.28) 42%,rgba(7,17,31,.42) 73%,rgba(7,17,31,.08));
+    z-index:2;
+  }
+  .hero::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    border-radius:36px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.30), inset 0 0 0 1px rgba(255,255,255,.08);
+    z-index:5;
+  }
+  .hero-copy{
+    position:relative !important;
+    z-index:3 !important;
+    justify-content:center !important;
+    padding:30px 30px 30px 34px !important;
+    background:
+      radial-gradient(circle at 8% 4%,rgba(255,255,255,.84),transparent 36%),
+      linear-gradient(135deg,rgba(244,250,255,.96) 0%,rgba(223,239,255,.91) 70%,rgba(204,224,244,.82) 100%) !important;
+  }
+  .hero-copy::before{
+    content:"";
+    position:absolute;
+    right:-70px;
+    top:0;
+    bottom:0;
+    width:140px;
+    background:linear-gradient(135deg,rgba(255,255,255,0) 0%,rgba(255,255,255,.28) 46%,rgba(255,255,255,0) 47%);
+    pointer-events:none;
+  }
+  .map-wrap{
+    position:relative !important;
+    z-index:1 !important;
+    border-left:1px solid rgba(255,255,255,.10) !important;
+  }
+  .kicker{
+    background:rgba(255,255,255,.62) !important;
+    border-color:#bfdbfe !important;
+    color:#1d4ed8 !important;
+  }
+  h1{
+    font-size:39px !important;
+    max-width:475px !important;
+    margin-top:15px !important;
+  }
+  .hero-copy p{
+    max-width:470px !important;
+    font-size:15.25px !important;
+  }
+  .search-card{
+    max-width:470px !important;
+    margin-top:18px !important;
+  }
+  .status-box{
+    max-width:470px !important;
+    margin-top:14px !important;
+  }
+  .map-top{
+    padding-left:24px !important;
+  }
+  #map{
+    min-height:468px !important;
+  }
+  .airport-board{
+    margin-top:18px !important;
+  }
+}
+
+
+
+/* ===== Clean joined dashboard: remove ugly seam shading ===== */
+@media (min-width:1021px){
+  .hero{
+    grid-template-columns:38.5% 61.5% !important;
+    min-height:550px !important;
+    background:#07111f !important;
+    border:1px solid rgba(191,219,254,.34) !important;
+    border-radius:36px !important;
+    overflow:hidden !important;
+    box-shadow:0 30px 76px rgba(2,8,23,.34) !important;
+  }
+
+  .hero::before,
+  .hero-copy::before{
+    display:none !important;
+    content:none !important;
+  }
+
+  .hero::after{
+    content:"" !important;
+    position:absolute !important;
+    inset:0 !important;
+    pointer-events:none !important;
+    border-radius:36px !important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.26), inset 0 0 0 1px rgba(255,255,255,.06) !important;
+    z-index:5 !important;
+  }
+
+  .hero-copy{
+    background:linear-gradient(180deg,#f4faff 0%,#eaf4ff 100%) !important;
+    border-right:1px solid rgba(148,163,184,.24) !important;
+    padding:30px 32px 30px 34px !important;
+  }
+
+  .map-wrap{
+    background:#07111f !important;
+    border-left:0 !important;
+  }
+
+  .map-top{
+    background:#07111f !important;
+    border-bottom:1px solid rgba(255,255,255,.10) !important;
+    padding-left:24px !important;
+  }
+
+  .search-card{
+    background:rgba(219,236,255,.70) !important;
+    border:1px solid rgba(148,189,232,.44) !important;
+    box-shadow:none !important;
+  }
+
+  .status-box{
+    background:#e7f7ff !important;
+    border-color:#bae6fd !important;
+    box-shadow:none !important;
+  }
+}
+
+
+/* ===== Aircraft dropdown visibility fix ===== */
+.search-card,
+.home-filter-panel,
+.home-filter-field,
+.aircraft-search-wrap{
+  position:relative;
+}
+.home-filter-field:has(#filterAircraft),
+.form-field:has(#subAircraftSearch),
+.aircraft-search-wrap{
+  z-index:6000;
+}
+.aircraft-search-results{
+  z-index:7000 !important;
+  max-height:360px !important;
+  overflow:auto !important;
+  box-shadow:0 28px 70px rgba(15,23,42,.28) !important;
+}
+.aircraft-option{
+  display:block;
+  width:100%;
+  background:white;
+  border:0;
+  text-align:left;
+}
+.aircraft-option b{
+  display:block;
+  font-size:13px;
+  color:#0f172a;
+}
+.aircraft-option span{
+  display:block;
+  margin-top:3px;
+  font-size:11px;
+  color:#64748b;
+  font-weight:800;
+}
+
+
+
+/* ===== Aircraft dropdown true floating overlay fix ===== */
+.search-card,
+.hero,
+.hero-copy,
+.home-filter-panel,
+.home-filter-field,
+.aircraft-search-wrap{
+  overflow:visible !important;
+}
+.aircraft-search-results.aircraft-floating{
+  position:fixed !important;
+  z-index:999999 !important;
+  display:none;
+  background:#fff !important;
+  border:1px solid #dbe4ef !important;
+  border-radius:18px !important;
+  box-shadow:0 32px 80px rgba(2,8,23,.38) !important;
+  overflow:auto !important;
+  padding:6px !important;
+}
+.aircraft-search-results.aircraft-floating.open{
+  display:block !important;
+}
+.aircraft-search-results.aircraft-floating .aircraft-option{
+  border-radius:14px;
+  padding:12px 14px;
+  margin:2px 0;
+}
+
+
+/* ===== Restore rounded main hero edges while keeping aircraft dropdown floating ===== */
+@media (min-width:1021px){
+  .hero{
+    border-radius:36px !important;
+    overflow:visible !important;
+    background:transparent !important;
+  }
+
+  .hero-copy{
+    border-radius:36px 0 0 36px !important;
+    overflow:visible !important;
+  }
+
+  .map-wrap{
+    border-radius:0 36px 36px 0 !important;
+    overflow:hidden !important;
+  }
+
+  .map-top{
+    border-radius:0 36px 0 0 !important;
+  }
+
+  #map{
+    border-radius:0 0 36px 0 !important;
+    overflow:hidden !important;
+  }
+
+  .mapboxgl-canvas,
+  .mapboxgl-canvas-container{
+    border-radius:0 0 36px 0 !important;
+  }
+
+  .hero::after{
+    display:none !important;
+    content:none !important;
+  }
+}
+
+@media (max-width:1020px){
+  .hero-copy,
+  .map-wrap,
+  #map{
+    border-radius:28px !important;
+    overflow:hidden !important;
+  }
+}
+
+
+/* ===== Monetization / Feature page groundwork ===== */
+.feature-page{
+  position:fixed;
+  inset:0;
+  z-index:9000;
+  background:rgba(2,8,23,.72);
+  backdrop-filter:blur(14px);
+  display:none;
+  padding:24px;
+  overflow:auto;
+}
+.feature-page.open{display:block}
+.feature-shell{
+  width:min(1180px,100%);
+  margin:0 auto;
+  background:#f8fbff;
+  border:1px solid rgba(191,219,254,.62);
+  border-radius:34px;
+  box-shadow:0 36px 90px rgba(2,8,23,.35);
+  overflow:hidden;
+}
+.feature-hero{
+  position:relative;
+  padding:32px;
+  color:white;
+  background:
+    radial-gradient(circle at 82% 10%,rgba(56,189,248,.42),transparent 34%),
+    linear-gradient(135deg,#0f172a,#1d4ed8 58%,#38bdf8);
+}
+.feature-close{
+  position:absolute;
+  top:18px;
+  right:18px;
+  border:0;
+  border-radius:999px;
+  background:rgba(255,255,255,.16);
+  color:white;
+  width:42px;
+  height:42px;
+  font-size:24px;
+  font-weight:900;
+  cursor:pointer;
+}
+.feature-hero h2{
+  margin:8px 0 8px;
+  max-width:780px;
+  font-size:42px;
+  letter-spacing:-1.4px;
+}
+.feature-hero p{max-width:760px;color:rgba(255,255,255,.86);font-weight:750;line-height:1.55}
+.feature-kicker{
+  display:inline-flex;
+  border-radius:999px;
+  padding:8px 12px;
+  background:rgba(255,255,255,.14);
+  border:1px solid rgba(255,255,255,.18);
+  font-weight:900;
+  letter-spacing:.7px;
+  text-transform:uppercase;
+  font-size:12px;
+}
+.feature-body{padding:26px 30px 32px}
+.feature-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:16px;
+}
+.feature-card,
+.ad-slot-card{
+  background:white;
+  border:1px solid #dbeafe;
+  border-radius:24px;
+  padding:18px;
+  box-shadow:0 14px 34px rgba(37,99,235,.08);
+}
+.feature-card h3,
+.ad-slot-card h3{margin:0 0 8px;color:#0f172a;font-size:18px}
+.feature-card p,
+.ad-slot-card p{margin:0;color:#64748b;font-weight:750;line-height:1.45;font-size:14px}
+.feature-card strong{display:block;margin-top:12px;color:#2563eb;font-size:24px}
+.ad-space-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:14px;
+  margin-top:18px;
+}
+.ad-slot-card{
+  background:linear-gradient(180deg,#ffffff,#eff6ff);
+}
+.ad-slot-card .slot-pill{
+  display:inline-flex;
+  margin-bottom:10px;
+  border-radius:999px;
+  padding:6px 10px;
+  background:#dbeafe;
+  color:#1d4ed8;
+  font-size:12px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.7px;
+}
+.feature-roadmap{
+  margin-top:20px;
+  padding:18px;
+  border-radius:24px;
+  background:#0f172a;
+  color:white;
+}
+.feature-roadmap h3{margin:0 0 10px;font-size:20px}
+.feature-roadmap ul{margin:0;padding-left:18px;color:#dbeafe;font-weight:750;line-height:1.7}
+.monetization-strip{
+  margin-top:18px;
+  display:grid;
+  grid-template-columns:1.3fr .7fr;
+  gap:14px;
+}
+.sponsor-preview{
+  border:1px dashed #93c5fd;
+  border-radius:22px;
+  padding:16px;
+  background:#eff6ff;
+  color:#1e3a8a;
+  font-weight:850;
+}
+.sponsor-preview small{display:block;color:#64748b;font-weight:900;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px}
+@media(max-width:860px){
+  .feature-page{padding:12px}
+  .feature-hero h2{font-size:32px}
+  .feature-grid,.ad-space-grid,.monetization-strip{grid-template-columns:1fr}
+}
+
+
+.featured-airport-strip{
+  margin:0 0 18px;
+  border:1px solid rgba(37,99,235,.22);
+  background:linear-gradient(135deg,#eff6ff,#f8fbff 58%,#eef2ff);
+  border-radius:24px;
+  padding:16px;
+  box-shadow:0 14px 34px rgba(37,99,235,.10);
+}
+.featured-strip-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:12px;
+}
+.featured-strip-head strong{display:block;color:#0f172a;font-size:16px;font-weight:950}
+.featured-strip-head span{display:block;color:#64748b;font-size:12px;font-weight:800;margin-top:2px}
+.featured-strip-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+  gap:12px;
+}
+.featured-strip-card{
+  border:1px solid #bfdbfe;
+  background:#fff;
+  border-radius:18px;
+  padding:13px 14px;
+  box-shadow:0 8px 18px rgba(15,23,42,.06);
+}
+.featured-strip-card small{display:block;color:#2563eb;font-size:10px;font-weight:950;text-transform:uppercase;letter-spacing:.8px}
+.featured-strip-card strong{display:block;margin-top:5px;color:#0f172a;font-size:15px;font-weight:950;line-height:1.25}
+.featured-strip-card span{display:block;margin-top:5px;color:#64748b;font-size:12px;font-weight:800;line-height:1.35}
+.featured-badge-gold,
+.chip.featured-badge-gold{
+  background:linear-gradient(135deg,#f59e0b,#facc15)!important;
+  color:#451a03!important;
+  border-color:rgba(245,158,11,.42)!important;
+  box-shadow:0 8px 18px rgba(245,158,11,.22);
+}
+.upgrade-featured-card{
+  margin-top:16px;
+  border:1px dashed rgba(37,99,235,.35);
+  background:linear-gradient(135deg,#f8fbff,#eef6ff);
+  border-radius:22px;
+  padding:16px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+}
+.upgrade-featured-card strong{display:block;color:#0f172a;font-size:15px;font-weight:950}
+.upgrade-featured-card span{display:block;color:#64748b;font-size:12px;font-weight:800;line-height:1.4;margin-top:3px}
+.featured-modal-price{
+  display:inline-flex;
+  align-items:baseline;
+  gap:6px;
+  border-radius:18px;
+  padding:14px 16px;
+  background:#eff6ff;
+  color:#1d4ed8;
+  font-weight:950;
+  margin:12px 0;
+}
+.featured-modal-price b{font-size:30px;letter-spacing:-1px}
+.featured-modal-list{margin:10px 0 0;padding-left:18px;color:#334155;font-weight:750;line-height:1.65}
+@media(max-width:720px){
+  .featured-strip-head,.upgrade-featured-card{align-items:flex-start;flex-direction:column}
+}
+
+
+
+/* ===== FEATURED LISTING MODAL READABILITY FIX =====
+   The featured upgrade modal uses .modal-card, not .mvp-shell. These rules
+   target that exact markup so the modal renders as a readable centered card. */
+#featuredUpgradeModal.mvp-modal{
+  background:rgba(7,17,31,.64) !important;
+  backdrop-filter:blur(10px) !important;
+  -webkit-backdrop-filter:blur(10px) !important;
+  padding:22px !important;
+  overflow:auto !important;
+}
+#featuredUpgradeModal.mvp-modal.open{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+}
+#featuredUpgradeModal .modal-card{
+  position:relative !important;
+  width:min(680px, calc(100vw - 32px)) !important;
+  max-width:680px !important;
+  margin:auto !important;
+  padding:30px !important;
+  border-radius:32px !important;
+  background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%) !important;
+  border:1px solid #bfdbfe !important;
+  color:#07111f !important;
+  box-shadow:0 32px 90px rgba(2,8,23,.45) !important;
+  opacity:1 !important;
+  filter:none !important;
+}
+#featuredUpgradeModal .modal-close{
+  position:absolute !important;
+  top:16px !important;
+  right:16px !important;
+  width:40px !important;
+  height:40px !important;
+  border-radius:999px !important;
+  border:1px solid #dbe4ef !important;
+  background:#ffffff !important;
+  color:#0f172a !important;
+  font-size:22px !important;
+  font-weight:900 !important;
+  cursor:pointer !important;
+  box-shadow:0 10px 24px rgba(15,23,42,.10) !important;
+}
+#featuredUpgradeModal .modal-kicker{
+  display:inline-flex !important;
+  align-items:center !important;
+  width:auto !important;
+  margin:0 0 12px !important;
+  padding:8px 12px !important;
+  border-radius:999px !important;
+  background:#eff6ff !important;
+  border:1px solid #bfdbfe !important;
+  color:#1d4ed8 !important;
+  font-size:12px !important;
+  font-weight:950 !important;
+  text-transform:uppercase !important;
+  letter-spacing:1.2px !important;
+}
+#featuredUpgradeModal h2{
+  margin:0 !important;
+  max-width:560px !important;
+  color:#07111f !important;
+  font-size:34px !important;
+  line-height:1.04 !important;
+  letter-spacing:-1.2px !important;
+  font-weight:950 !important;
+}
+#featuredUpgradeModal p,
+#featuredUpgradeModal #featuredUpgradeCopy{
+  margin-top:10px !important;
+  color:#475569 !important;
+  font-size:16px !important;
+  line-height:1.55 !important;
+  font-weight:750 !important;
+}
+#featuredUpgradeModal .featured-modal-price{
+  width:max-content !important;
+  max-width:100% !important;
+  display:flex !important;
+  align-items:baseline !important;
+  gap:8px !important;
+  margin:22px 0 18px !important;
+  padding:16px 20px !important;
+  border-radius:24px !important;
+  background:linear-gradient(135deg,#2563eb,#38bdf8) !important;
+  color:white !important;
+  border:0 !important;
+  box-shadow:0 18px 34px rgba(37,99,235,.25) !important;
+}
+#featuredUpgradeModal .featured-modal-price b{
+  color:white !important;
+  font-size:34px !important;
+  line-height:1 !important;
+  font-weight:950 !important;
+}
+#featuredUpgradeModal .featured-modal-price span{
+  color:rgba(255,255,255,.92) !important;
+  font-size:15px !important;
+  font-weight:900 !important;
+}
+#featuredUpgradeModal .featured-modal-list{
+  margin:0 0 22px !important;
+  padding:0 !important;
+  list-style:none !important;
+  color:#334155 !important;
+  font-weight:850 !important;
+  line-height:1.55 !important;
+}
+#featuredUpgradeModal .featured-modal-list li{
+  position:relative !important;
+  margin:9px 0 !important;
+  padding-left:30px !important;
+  color:#334155 !important;
+  opacity:1 !important;
+}
+#featuredUpgradeModal .featured-modal-list li::before{
+  content:"✓" !important;
+  position:absolute !important;
+  left:0 !important;
+  top:0 !important;
+  width:21px !important;
+  height:21px !important;
+  border-radius:999px !important;
+  background:#dcfce7 !important;
+  color:#047857 !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  font-size:13px !important;
+  font-weight:950 !important;
+}
+#featuredUpgradeModal .actions{
+  display:flex !important;
+  flex-wrap:wrap !important;
+  gap:10px !important;
+  margin-top:12px !important;
+}
+#featuredUpgradeModal .actions .btn,
+#featuredUpgradeModal .actions button{
+  min-height:46px !important;
+  border-radius:999px !important;
+  padding:12px 18px !important;
+  font-weight:950 !important;
+}
+#featuredUpgradeModal .form-note{
+  margin-top:18px !important;
+  background:#eff6ff !important;
+  color:#1d4ed8 !important;
+  border:1px solid #bfdbfe !important;
+  border-radius:18px !important;
+  padding:13px 15px !important;
+  font-size:13px !important;
+  line-height:1.45 !important;
+  font-weight:850 !important;
+}
+@media(max-width:640px){
+  #featuredUpgradeModal.mvp-modal{align-items:flex-start !important;padding:14px !important;}
+  #featuredUpgradeModal .modal-card{width:100% !important;padding:24px 18px !important;border-radius:26px !important;}
+  #featuredUpgradeModal h2{font-size:28px !important;}
+  #featuredUpgradeModal .featured-modal-price{width:100% !important;justify-content:center !important;}
+}
+
+
+
+/* ===== Map render hotfix: stable raster map on GitHub Pages ===== */
+.map-wrap{
+  background:#07111f !important;
+  overflow:hidden !important;
+}
+#map{
+  display:block !important;
+  position:relative !important;
+  width:100% !important;
+  min-height:520px !important;
+  background:#132033 !important;
+  overflow:hidden !important;
+}
+#map .mapboxgl-canvas-container,
+#map .mapboxgl-canvas{
+  position:absolute !important;
+  inset:0 !important;
+  width:100% !important;
+  height:100% !important;
+  min-height:100% !important;
+}
+#map .mapboxgl-control-container{
+  position:absolute !important;
+  inset:0 !important;
+  pointer-events:none !important;
+}
+#map .mapboxgl-ctrl-top-left,
+#map .mapboxgl-ctrl-top-right,
+#map .mapboxgl-ctrl-bottom-left,
+#map .mapboxgl-ctrl-bottom-right{
+  pointer-events:auto !important;
+}
+
+</style>
+</head>
+<body>
+<header class="nav">
+  <div class="nav-inner">
+    <div class="brand"><div class="logo">✈</div><div><strong>Nearby Flyer</strong><span>Digital Aviation Directory</span></div></div>
+    <div class="nav-actions"><button class="btn ghost" onclick="openFeaturePage()">Features</button><button class="btn ghost" id="loginBtn" onclick="openAuthModal()">Log In</button><button class="btn ghost" id="profileBtn" onclick="openProfileModal()" style="display:none">Profile</button><button class="btn ghost" id="adminBtn" onclick="openAdminModal()">Admin</button><button class="btn primary" onclick="openSubmitModal()">List Your Service</button></div>
+  </div>
+</header>
+
+<main class="page">
+  <section class="hero">
+    <div class="hero-copy">
+      <div class="kicker">Airport Service Directory</div>
+      <h1>CFIs, rentals, schools, and shops in one place.</h1>
+      
+      <div class="search-card">
+        <div class="search-row">
+          <div class="search-box"><span>🔎</span><input id="searchInput" placeholder="Search airport, city, CFI, aircraft, or school…" oninput="applyHomeFilters(false)"></div>
+          <button class="btn primary" onclick="applyHomeFilters(true)">Search</button>
+        </div>
+
+        <div class="home-filter-panel">
+          <div class="home-filter-field">
+            <label>Looking for</label>
+            <select id="filterServiceType" onchange="applyHomeFilters(false)">
+              <option value="">Any service</option>
+              <option value="cfi">CFI / instruction</option>
+              <option value="flight_school">Flight school</option>
+              <option value="rental_aircraft">Rental aircraft</option>
+              <option value="flying_club">Flying club</option>
+              <option value="maintenance">Maintenance</option>
+            </select>
+          </div>
+
+          <div class="home-filter-field">
+            <label>Aircraft type / model</label>
+            <div class="aircraft-search-wrap">
+              <input id="filterAircraft" placeholder="Search aircraft model…" oninput="filterAircraftOptions()" onfocus="filterAircraftOptions()" autocomplete="off">
+              <div class="aircraft-search-results" id="aircraftResults"></div>
+            </div>
+          </div>
+
+          <div class="home-filter-field">
+            <label>Airport / city</label>
+            <input id="filterAirportCity" placeholder="KDVT, Glendale, Mesa…" oninput="applyHomeFilters(false)">
+          </div>
+
+          <div class="home-filter-field">
+            <label>Sort / view</label>
+            <select id="filterSort" onchange="applyHomeFilters(false)">
+              <option value="activity">Most activity first</option>
+              <option value="icao">Airport code A-Z</option>
+              <option value="city">City A-Z</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="home-filter-actions">
+          <label class="filter-check">
+            <input type="checkbox" id="filterOnlyAvailable" checked onchange="applyHomeFilters(false)">
+            Only show airports with matching services
+          </label>
+          <button class="btn ghost" onclick="clearHomeFilters()">Clear filters</button>
+        </div>
+        <div class="filter-summary" id="filterSummary">Showing all airport boards.</div>
+      </div>
+      <div class="status-box" id="statusBox">Use the filters to narrow airports and services.</div>
+    </div>
+
+    <section class="map-wrap">
+      <div class="map-top"><div><h2>Airport Services Map</h2><p>Airport bubbles show available services. Click one to see details below.</p></div><div class="map-icon-actions"><button class="icon-btn" onclick="showUserLocation()" title="Use my location" aria-label="Use my location"><span>⌖</span></button><button class="icon-btn" onclick="loadAirports()" title="Refresh map" aria-label="Refresh map"><span>↻</span></button></div></div>
+      <div id="map"></div>
+    </section>
+  </section>
+
+  <section class="airport-board" id="board">
+    <div class="board-header">
+      <div class="board-top">
+        <div>
+          <div class="board-code" id="boardCode">—</div>
+          <h2 id="boardTitle">Select an airport</h2>
+          <p id="boardCity">Click an airport bubble on the map.</p>
+          <div class="stat-row">
+            <div class="stat"><strong id="statCfis">0</strong><span>CFIs</span></div>
+            <div class="stat"><strong id="statSchools">0</strong><span>Schools</span></div>
+            <div class="stat"><strong id="statRentals">0</strong><span>Rentals</span></div>
+            <div class="stat"><strong id="statClubs">0</strong><span>Clubs</span></div>
+            <div class="stat"><strong id="statMx">0</strong><span>Maintenance</span></div>
+          </div>
+        </div>
+        
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="overview" onclick="selectTab('overview')">Overview</button>
+      <button class="tab" data-tab="cfi" onclick="selectTab('cfi')">CFIs<span class="tab-count" id="tabCountCfis">0</span></button>
+      <button class="tab" data-tab="flight_school" onclick="selectTab('flight_school')">Schools<span class="tab-count" id="tabCountSchools">0</span></button>
+      <button class="tab" data-tab="rental_aircraft" onclick="selectTab('rental_aircraft')">Rentals<span class="tab-count" id="tabCountRentals">0</span></button>
+      <button class="tab" data-tab="flying_club" onclick="selectTab('flying_club')">Clubs<span class="tab-count" id="tabCountClubs">0</span></button>
+      <button class="tab" data-tab="maintenance" onclick="selectTab('maintenance')">Maintenance<span class="tab-count" id="tabCountMx">0</span></button>
+    </div>
+
+    <div class="board-content" id="boardContent"><div class="empty">Loading airport data…</div></div>
+  </section>
+
+  <section class="cta">
+    <div><h2>List as a school, CFI, or aircraft owner.</h2><p>Independent CFIs, flight schools, aircraft owners, clubs, and shops can all post to the airport board where they operate.</p></div>
+    <button class="btn primary" onclick="openSubmitModal()">Start a Listing</button>
+  </section>
+
+
+
+
+  <div class="mvp-modal" id="featuredUpgradeModal">
+    <div class="modal-card">
+      <button class="modal-close" type="button" onclick="closeFeaturedUpgradeModal()">×</button>
+      <span class="modal-kicker">Featured Airport Listing</span>
+      <h2>Get seen first at the airport</h2>
+      <p id="featuredUpgradeCopy">Featured listings appear above regular listings for pilots searching this airport.</p>
+      <div class="featured-modal-price"><b>$19</b><span>/ month per airport</span></div>
+      <ul class="featured-modal-list">
+        <li>Higher placement on the airport board</li>
+        <li>Featured badge on your listing card</li>
+        <li>Placement in the airport overview featured area</li>
+        <li>Ready for Stripe billing and future analytics</li>
+      </ul>
+      <div class="actions" style="margin-top:18px">
+        <button class="primary" onclick="requestFeaturedPlacement()">Request Featured Placement</button>
+        <button onclick="closeFeaturedUpgradeModal()">Not Now</button>
+      </div>
+      <p class="form-note" id="featuredUpgradeNote">This creates the first monetization path. Billing can be connected to Stripe next.</p>
+    </div>
+  </div>
+
+
+  <div class="feature-page" id="featurePage">
+    <div class="feature-shell">
+      <section class="feature-hero">
+        <button class="feature-close" type="button" onclick="closeFeaturePage()">×</button>
+        <span class="feature-kicker">Platform growth</span>
+        <h2>Future monetization and featured placement center</h2>
+        <p>This page creates space for paid upgrades without cluttering the main airport board. It is ready for featured listings, sponsored airport placements, banner inventory, partner offers, and future billing hooks.</p>
+      </section>
+      <section class="feature-body">
+        <div class="feature-grid">
+          <div class="feature-card"><h3>Featured Listings</h3><p>Upgrade CFIs, schools, clubs, shops, and aircraft owners to appear higher on airport boards.</p><strong>$19/mo</strong></div>
+          <div class="feature-card"><h3>Airport Sponsorships</h3><p>Reserve a sponsor spot for one airport, city, or regional training market.</p><strong>Local</strong></div>
+          <div class="feature-card"><h3>Partner Ads</h3><p>Space for insurance, financing, headsets, fuel cards, training tools, and aviation partners.</p><strong>Slots</strong></div>
+        </div>
+
+        <div class="ad-space-grid">
+          <div class="ad-slot-card"><span class="slot-pill">Ad slot A</span><h3>Airport board banner</h3><p>Reserved banner above the listings for a selected airport. Best for local flight schools, FBOs, maintenance shops, and aviation partners.</p></div>
+          <div class="ad-slot-card"><span class="slot-pill">Ad slot B</span><h3>Map-side sponsor</h3><p>Future small sponsor block near the map/status area. Designed to be visible without blocking airport search.</p></div>
+          <div class="ad-slot-card"><span class="slot-pill">Ad slot C</span><h3>Profile upgrade</h3><p>Paid profile tools: more photos, aircraft hangar cards, priority placement, verified badge, and lead/contact insights.</p></div>
+          <div class="ad-slot-card"><span class="slot-pill">Ad slot D</span><h3>Marketplace placements</h3><p>Future placements for aircraft insurance, financing, training supplies, mechanic tools, and student pilot products.</p></div>
+        </div>
+
+        <div class="monetization-strip">
+          <div class="sponsor-preview"><small>Preview placeholder</small>Sponsored airport partner / featured local provider space</div>
+          <div class="sponsor-preview"><small>Future billing</small>Stripe-ready plan area</div>
+        </div>
+
+        <div class="feature-roadmap">
+          <h3>Build roadmap</h3>
+          <ul>
+            <li>Add database tables for plans, feature placements, invoices, and sponsor slots.</li>
+            <li>Connect Stripe next for $19/mo featured listings and airport sponsorships.</li>
+            <li>Let admins approve, schedule, pause, and track sponsor placements.</li>
+            <li>Keep the main user experience clean while monetization runs in reserved spaces.</li>
+          </ul>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="listing-page" id="listingPage">
+    <div class="listing-page-shell">
+      <section class="listing-hero" id="listingHero">
+        <button class="listing-close" type="button" onclick="closeListingPage()"><span>Close</span><span class="close-x">×</span></button>
+        <div class="listing-photo-strip" id="detailHeroPhotos"></div>
+        <div class="listing-hero-content">
+          <div class="detail-chip-row" id="detailChips"></div>
+          <div class="listing-identity">
+            <div class="listing-avatar" id="detailAvatar">✈</div>
+            <div class="listing-name-wrap">
+              <h2 id="detailTitle">Listing</h2>
+              <p id="detailSubtitle">Loading listing details…</p>
+            </div>
+          </div>
+          <div class="detail-actions" id="detailHeroActions"></div>
+        </div>
+      </section>
+      <section class="detail-body">
+        <div>
+          <div class="detail-card">
+            <h3>Description</h3>
+            <p class="desc" id="detailDescription">Loading…</p>
+          </div>
+
+          <div class="detail-card" style="margin-top:16px">
+            <h3>Photos</h3>
+            <div class="photo-grid" id="detailPhotoGrid"></div>
+            <p class="detail-note">Public listing photos can include CFI headshots, aircraft exterior/interior, panel photos, school logos, facilities, or fleet photos.</p>
+          </div>
+        </div>
+
+        <aside>
+          <div class="detail-card">
+            <h3>Listing Details</h3>
+            <div class="detail-grid" id="detailGrid"></div>
+          </div>
+
+          <div class="detail-card" style="margin-top:16px">
+            <h3>Aircraft / Services</h3>
+            <div class="detail-grid" id="detailAircraftGrid"></div>
+          </div>
+
+          <div class="detail-card" style="margin-top:16px">
+            <h3>Contact</h3>
+            <div class="detail-grid" id="detailContactGrid"></div>
+          </div>
+        </aside>
+      </section>
+    </div>
+  </div>
+
+
+
+  <div class="mvp-modal" id="authModal">
+    <div class="mvp-shell">
+      <div class="mvp-head">
+        <button class="mvp-close" onclick="closeAuthModal()">×</button>
+        <h2>Log in to Nearby Flyer.</h2>
+        <p>Sign in or create a profile for listings, future community posts, and hangar features.</p>
+      </div>
+      <div class="mvp-body">
+        <div class="auth-method-toggle" id="authMethodToggle">
+          <button id="authEmailMethod" class="active" onclick="setAuthMethod('email')" type="button">Email</button>
+          <button id="authPhoneMethod" onclick="setAuthMethod('phone')" type="button">Phone / SMS</button>
+        </div>
+
+        <p class="auth-split-note" id="authHelperText">Sign in with email and password, or create a new account.</p>
+
+        <form onsubmit="submitAuth(event)">
+          <div id="emailAuthFields">
+            <div class="form-grid">
+              <div class="form-field"><label>Email</label><input id="authEmail" type="email" placeholder="you@example.com"></div>
+              <div class="form-field"><label>Password</label><input id="authPassword" type="password" placeholder="At least 6 characters"></div>
+              <div class="form-field"><label>Display Name <span style="color:#64748b;text-transform:none;letter-spacing:0">(for new accounts)</span></label><input id="authDisplayName" placeholder="Bryce Randall"></div>
+              <div class="form-field"><label>Handle <span style="color:#64748b;text-transform:none;letter-spacing:0">(optional)</span></label><input id="authHandle" placeholder="bryce"></div>
+            </div>
+
+            <div class="auth-simple-actions">
+              <button class="btn primary" type="button" onclick="signInWithEmail()">Sign In</button>
+              <button class="btn ghost" type="button" onclick="createEmailAccount()">Create Account</button>
+              <button class="btn ghost" type="button" onclick="sendMagicLink()">Email Magic Link</button>
+            </div>
+          </div>
+
+          <div id="phoneAuthFields" style="display:none">
+            <div class="form-field">
+              <label>Phone Number</label>
+              <input id="authPhone" placeholder="+14805551234">
+            </div>
+
+            <div class="auth-simple-actions">
+              <button class="btn primary" type="button" onclick="sendPhoneCode()">Send SMS Code</button>
+            </div>
+
+            <div class="phone-code-section">
+              <div class="form-field">
+                <label>SMS Code</label>
+                <input id="authOtpCode" placeholder="123456">
+              </div>
+              <button class="btn primary" type="button" onclick="verifyPhoneCode()">Verify & Sign In</button>
+            </div>
+          </div>
+
+          <div class="mvp-status" id="authStatus">Ready.</div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="mvp-modal" id="profileModal">
+    <div class="mvp-shell">
+      <div class="mvp-head">
+        <button class="mvp-close" onclick="closeProfileModal()">×</button>
+        <h2>Your aviation profile.</h2>
+        <p>This profile can power listings, the future community forum, and the hangar later.</p>
+      </div>
+      <div class="mvp-body">
+        <div class="profile-hero">
+          <div class="profile-avatar" id="profileAvatar">NF</div>
+          <div>
+            <h3 id="profileNamePreview">Nearby Flyer User</h3>
+            <p style="color:#64748b;font-weight:700;margin-top:4px" id="profileHandlePreview">@handle</p>
+            <input id="profileAvatarInput" type="file" accept="image/*" style="margin-top:12px">
+          </div>
+        </div>
+
+        <form onsubmit="saveProfile(event)">
+          <div class="form-grid">
+            <div class="form-field"><label>Display Name</label><input id="profileDisplayName"></div>
+            <div class="form-field"><label>Handle</label><input id="profileHandle"></div>
+            <div class="form-field"><label>Home Airport</label><input id="profileHomeAirport" placeholder="KDVT"></div>
+            <div class="form-field"><label>Pilot Status</label>
+              <select id="profilePilotStatus">
+                <option value="future_pilot">Future Pilot</option>
+                <option value="student_pilot">Student Pilot</option>
+                <option value="private_pilot">Private Pilot</option>
+                <option value="instrument_pilot">Instrument Pilot</option>
+                <option value="commercial_pilot">Commercial Pilot</option>
+                <option value="cfi">CFI</option>
+                <option value="aircraft_owner">Aircraft Owner</option>
+                <option value="school_operator">School / Operator</option>
+                <option value="maintenance_provider">Maintenance Provider</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="form-field"><label>City</label><input id="profileCity"></div>
+            <div class="form-field"><label>State</label><input id="profileState"></div>
+            <div class="form-field"><label>Phone</label><input id="profilePhone"></div>
+            <div class="form-field"><label>Website</label><input id="profileWebsite"></div>
+          </div>
+          <div class="form-field"><label>Bio</label><textarea id="profileBio" placeholder="Tell other pilots about yourself, what you fly, what you are learning, or what services you offer."></textarea></div>
+          <div class="form-field"><label>Interests</label><input id="profileInterests" placeholder="Training, IFR, rentals, hangar, maintenance, community"></div>
+
+          <div class="profile-actions">
+            <button class="btn primary" type="submit">Save Profile</button>
+            <button class="btn ghost" type="button" onclick="signOut()">Log Out</button>
+          </div>
+          <div class="mvp-status" id="profileStatus">Ready.</div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="mvp-modal" id="submitModal">
+    <div class="mvp-shell">
+      <div class="mvp-head">
+        <button class="mvp-close" onclick="closeSubmitModal()">×</button>
+        <h2>List your aviation service.</h2>
+        <p>Submit a CFI service, rental aircraft, school, club, or maintenance listing. New submissions save as pending for review.</p>
+      </div>
+      <div class="mvp-body">
+        <div class="form-note">MVP flow: this saves to Supabase as a pending submission. After review, you can convert it into a live listing.</div>
+
+        <div class="type-picker">
+          <button class="type-card active" data-submit-type="cfi" onclick="setSubmitType('cfi')"><b>CFI Service</b><span>Instruction, CFI/CFII/MEI</span></button>
+          <button class="type-card" data-submit-type="rental_aircraft" onclick="setSubmitType('rental_aircraft')"><b>Rental Aircraft</b><span>Owner or club aircraft</span></button>
+          <button class="type-card" data-submit-type="flight_school" onclick="setSubmitType('flight_school')"><b>Flight School</b><span>Programs, fleet, discovery flights</span></button>
+          <button class="type-card" data-submit-type="flying_club" onclick="setSubmitType('flying_club')"><b>Flying Club</b><span>Membership and fleet</span></button>
+          <button class="type-card" data-submit-type="maintenance" onclick="setSubmitType('maintenance')"><b>Maintenance</b><span>A&P, IA, avionics, shops</span></button>
+        </div>
+
+        <form id="submitListingForm" onsubmit="submitListing(event)">
+          <div class="form-section-title">Required basics</div>
+          <div class="form-grid">
+            <div class="form-field"><label>Listing Title <span class="required-star">*</span></label><input id="subTitle" required placeholder="Sarah Mitchell, CFII"></div>
+            <div class="form-field"><label>Airport ICAO <span class="required-star">*</span></label><input id="subAirport" required placeholder="KDVT" maxlength="5"></div>
+            <div class="form-field"><label>Contact Name <span class="required-star">*</span></label><input id="subContact" required placeholder="Your name"></div>
+            <div class="form-field"><label>Email or Phone <span class="required-star">*</span></label><input id="subPrimaryContact" required placeholder="Email or phone required"></div>
+            <div class="form-field"><label>Email</label><input id="subEmail" type="email" placeholder="you@example.com"></div>
+            <div class="form-field"><label>Phone</label><input id="subPhone" placeholder="480-555-0000"></div>
+            <div class="form-field"><label>Business / School Name</label><input id="subBusiness" placeholder="Optional"></div>
+            <div class="form-field"><label>Website</label><input id="subWebsite" placeholder="https://..."></div>
+          </div>
+
+          <div class="form-field"><label>Description <span class="required-star">*</span></label><textarea id="subDescription" required placeholder="Describe what you offer, who it is best for, aircraft used, and how people should contact you."></textarea></div>
+
+          <div class="form-section-title">Pricing</div>
+          <div class="form-grid">
+            <div class="form-field" id="cfiRateField"><label>CFI Instruction Hourly Rate</label><input id="subCfiRate" placeholder="$50/hr"></div>
+            <div class="form-field" id="aircraftRateField"><label>Aircraft Hourly Rate</label><input id="subAircraftRate" placeholder="$165/hr"></div>
+            <div class="form-field" id="rateTypeField"><label>Aircraft Rate Type</label>
+              <select id="subAircraftRateType">
+                <option value="unknown">Unknown / Not sure</option>
+                <option value="wet">Wet</option>
+                <option value="dry">Dry</option>
+                <option value="not_applicable">Not applicable</option>
+              </select>
+            </div>
+            <div class="form-field" id="discoveryPriceField"><label>Discovery Flight Price</label><input id="subDiscoveryPrice" placeholder="$129"></div>
+          </div>
+
+          <div class="form-section-title">Services and qualifications</div>
+          <div class="form-grid">
+            <div class="form-field"><label id="subCertLabel">Ratings / Certifications</label><input id="subCerts" placeholder="CFI, CFII, MEI"></div>
+            <div class="form-field"><label>Services Offered <span class="required-star">*</span></label><input id="subServices" required placeholder="Private, Instrument, Commercial, Discovery Flights"></div>
+            <div class="form-field"><label>Checkout / Requirements</label><input id="subRequirements" placeholder="Checkout required, insurance mins, membership"></div>
+            <div class="form-field"><label>Availability</label><input id="subAvailability" placeholder="Weekends, weekdays, available this week"></div>
+          </div>
+
+          <div class="form-section-title">Aircraft selection</div>
+          <div class="form-note">Search the aircraft database and select one or more aircraft models. Tail numbers are entered separately.</div>
+          <div class="form-grid">
+            <div class="form-field">
+              <label>Aircraft Make / Model / Identifier</label>
+              <div class="aircraft-search-wrap">
+                <input id="subAircraftSearch" placeholder="Search C172, PA28, SR20, Diamond, Piper…" oninput="filterAircraftOptions()" onfocus="filterAircraftOptions()" autocomplete="off">
+                <div class="aircraft-search-results" id="aircraftSearchResults"></div>
+              </div>
+              <div class="selected-aircraft-list" id="selectedAircraftList"></div>
+            </div>
+            <div class="form-field"><label>Tail Number(s)</label><input id="subTail" placeholder="N12345, N734SP"></div>
+            <div class="form-field"><label>Aircraft Year</label><input id="subAircraftYear" placeholder="1978, 2006, etc."></div>
+            <div class="form-field"><label>Avionics</label><input id="subAircraftAvionics" placeholder="G1000, GTN 650, dual G5, steam gauges..."></div>
+          </div>
+
+          <div class="photo-upload">
+            <div class="form-field" style="margin-bottom:0">
+              <label>Photos</label>
+              <input id="subPhotos" type="file" multiple accept="image/*" onchange="previewSubmissionPhotos()">
+            </div>
+            <div class="photo-preview" id="subPhotoPreview"></div>
+          </div>
+
+          <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn primary" type="submit">Submit for Review</button>
+            <button class="btn ghost" type="button" onclick="closeSubmitModal()">Cancel</button>
+          </div>
+          <div class="mvp-status" id="submitStatus">Ready.</div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="mvp-modal" id="claimModal">
+    <div class="mvp-shell">
+      <div class="mvp-head">
+        <button class="mvp-close" onclick="closeClaimModal()">×</button>
+        <h2>Claim this listing.</h2>
+        <p>Use the email or phone number connected to this listing. The claim will be saved for admin review.</p>
+      </div>
+      <div class="mvp-body">
+        <form onsubmit="submitClaim(event)">
+          <input type="hidden" id="claimListingId">
+          <div class="form-grid">
+            <div class="form-field"><label>Your Name</label><input id="claimName" required></div>
+            <div class="form-field"><label>Email</label><input id="claimEmail" type="email"></div>
+            <div class="form-field"><label>Phone</label><input id="claimPhone"></div>
+          </div>
+          <div class="form-field"><label>Message</label><textarea id="claimMessage" placeholder="Tell us why this is your listing."></textarea></div>
+          <button class="btn primary" type="submit">Submit Claim</button>
+          <div class="mvp-status" id="claimStatus">Ready.</div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="mvp-modal" id="adminModal">
+    <div class="mvp-shell">
+      <div class="mvp-head">
+        <button class="mvp-close" onclick="closeAdminModal()">×</button>
+        <h2>Admin review.</h2>
+        <p>Review pending listing submissions and claim requests. This is an MVP admin view.</p>
+      </div>
+      <div class="mvp-body">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+          <button class="btn primary" onclick="loadAdminData()">Refresh Admin Data</button>
+          <button class="btn ghost" onclick="closeAdminModal()">Close</button>
+        </div>
+        <div class="form-note">For production, protect this behind real admin auth. For now, this helps you inspect pending data while building.</div>
+        <h3 style="margin:18px 0 10px">Pending Listings</h3>
+        <div class="admin-grid" id="adminSubmissions"><div class="empty">Click refresh.</div></div>
+        <h3 style="margin:24px 0 10px">Claim Requests</h3>
+        <div class="admin-grid" id="adminClaims"><div class="empty">Click refresh.</div></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+/*
+  PASTE YOUR MAPBOX TOKEN HERE:
+  It should start with pk.
+*/
+const MAPBOX_TOKEN = "pk.eyJ1IjoiYnJ5Y2VndWluIiwiYSI6ImNtcDNvbmR2ejBvd20ycXEwMHY5OGdqdnMifQ.hLzfhWZsbmjzbgn3-WpKdg";
+
+const SUPABASE_URL = "https://tiwpqhwxfdqkvlpjthwp.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpd3BxaHd4ZmRxa3ZscGp0aHdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2ODM5MDksImV4cCI6MjA5NDI1OTkwOX0.F-D2xSlqFQLsDB2tJGWLaj16kJAa4XwahNWHFc3Jsso";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let map;
+let markers = [];
+let markerElements = [];
+let userMarker = null;
+let airports = [];
+let filteredAirports = [];
+let airportAircraftIndex = {};
+let listingAircraftIndex = {};
+let airportAircraftListingMeta = {};
+let listingAircraftDetails = {};
+let currentAirport = null;
+let hasAutoSelectedAirport = false;
+let currentListings = [];
+let currentFeaturedPlacements = [];
+let listingPhotoCache = {};
+let listingDetailCache = {};
+let currentTab = "overview";
+
+const fallbackCoords = {
+  KDVT: [-112.0825, 33.6883],
+  KGEU: [-112.2951, 33.5269],
+  KCHD: [-111.8111, 33.2691],
+  KFFZ: [-111.7283, 33.4608],
+  KBXK: [-112.6862, 33.4204],
+  P52: [-112.0350, 34.7300],
+  KIGM: [-113.9380, 35.2595],
+  KSZT: [-116.5600, 48.2995],
+  KSDL: [-111.9105, 33.6229]
+};
+
+const typeLabels = {
+  cfi: "CFI",
+  flight_school: "Flight School",
+  rental_aircraft: "Rental Aircraft",
+  flying_club: "Flying Club",
+  maintenance: "Maintenance",
+  aircraft_sale: "Aircraft for Sale",
+  discovery_flight: "Discovery Flight"
+};
+
+function setStatus(msg) {
+  document.getElementById("statusBox").textContent = msg;
+}
+
+function initMap() {
+  const darkRasterStyle = {
+    version: 8,
+    sources: {
+      cartoDark: {
+        type: "raster",
+        tiles: [
+          "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+          "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+          "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+          "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"
+        ],
+        tileSize: 256,
+        attribution: "&copy; OpenStreetMap &copy; CARTO"
+      }
+    },
+    layers: [
+      { id: "carto-dark", type: "raster", source: "cartoDark", minzoom: 0, maxzoom: 19 }
+    ]
+  };
+
+  // Use non-Mapbox raster tiles for the base map so GitHub Pages does not
+  // depend on Mapbox token/domain settings. Markers and airport boards still
+  // work the same.
+  mapboxgl.accessToken = MAPBOX_TOKEN || "";
+  map = new mapboxgl.Map({
+    container: "map",
+    style: darkRasterStyle,
+    center: [-112.02, 33.52],
+    zoom: 8
+  });
+
+  map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "bottom-right");
+
+  map.on("zoom", updateMarkerScale);
+  map.on("load", () => {
+    map.resize();
+    setTimeout(() => map && map.resize(), 250);
+    setTimeout(() => map && map.resize(), 900);
+    setTimeout(() => map && map.resize(), 1600);
+    updateMarkerScale();
+    loadAirports();
+    setTimeout(showUserLocation, 800);
+  });
+
+  window.addEventListener("resize", () => {
+    if(map) map.resize();
+  });
+
+  return true;
+}
+
+function updateMarkerScale() {
+  if(!map) return;
+  const z = map.getZoom();
+  // Small when zoomed out, larger when zoomed in.
+  // This only works if .airport-bubble does not override --marker-scale itself.
+  const scale = Math.max(0.34, Math.min(1.22, 0.34 + ((z - 4.5) * 0.13)));
+  markerElements.forEach(el => el.style.setProperty("--marker-scale", scale.toFixed(2)));
+}
+
+async function loadAirports() {
+  if(!map) return;
+
+  setStatus("Loading airport boards from Supabase…");
+
+  const { data, error } = await sb
+    .from("airport_board_counts")
+    .select("*")
+    .order("icao", { ascending: true });
+
+  if(error) {
+    setStatus("Supabase airport error: " + error.message);
+    document.getElementById("boardContent").innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
+    return;
+  }
+
+  airports = (data || []).filter(a => getCoords(a));
+  await loadAirportAircraftIndex();
+  await loadAircraftSearchOptions();
+  filteredAirports = [...airports];
+  setStatus(`Loaded ${airports.length} airport boards. Use the filters to narrow the map.`);
+  applyHomeFilters(false);
+
+  if(airports.length && !currentAirport) {
+    renderNoAirportSelected();
+  }
+}
+
+function getCoords(a) {
+  if(a.longitude && a.latitude) return [Number(a.longitude), Number(a.latitude)];
+  return fallbackCoords[a.icao];
+}
+
+function normalizeAircraftSearch(value){
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function aircraftTextMatches(text, query){
+  if(!query) return true;
+  const hay = String(text || "").toLowerCase();
+  const normalizedHay = normalizeAircraftSearch(text);
+  const normalizedQuery = normalizeAircraftSearch(query);
+  return hay.includes(String(query || "").toLowerCase()) || (normalizedQuery && normalizedHay.includes(normalizedQuery));
+}
+
+function addAircraftIndexText(index, key, text){
+  if(!key || !text) return;
+  if(!index[key]) index[key] = [];
+  index[key].push(String(text));
+}
+
+async function loadAirportAircraftIndex(){
+  airportAircraftIndex = {};
+  listingAircraftIndex = {};
+  airportAircraftListingMeta = {};
+  listingAircraftDetails = {};
+
+  const { data, error } = await sb
+    .from("listing_aircraft")
+    .select(`
+      listing_id,
+      aircraft_identifier,
+      tail_number,
+      hourly_rate_text,
+      rate_type,
+      aircraft_year,
+      aircraft_models(manufacturer, model, identifier, common_name),
+      listings(title, description, listing_type, status, listing_airports(airports(icao)))
+    `);
+
+  if(error){
+    console.warn("Aircraft filter data could not load:", error.message);
+    return;
+  }
+
+  (data || []).forEach(row => {
+    const model = row.aircraft_models || {};
+    const listing = row.listings || {};
+    if(String(listing.status || '').toLowerCase() === 'archived') return;
+    const airportLinks = Array.isArray(listing.listing_airports) ? listing.listing_airports : [];
+    const textBlob = [
+      row.aircraft_identifier,
+      row.tail_number,
+      row.aircraft_year,
+      model.manufacturer,
+      model.model,
+      model.identifier,
+      model.common_name,
+      listing.title,
+      listing.description
+    ].filter(Boolean).join(" ");
+
+    addAircraftIndexText(listingAircraftIndex, row.listing_id, textBlob);
+
+    if(!listingAircraftDetails[row.listing_id]) listingAircraftDetails[row.listing_id] = [];
+    listingAircraftDetails[row.listing_id].push({
+      aircraftIdentifier: row.aircraft_identifier || '',
+      tailNumber: row.tail_number || '',
+      hourlyRateText: row.hourly_rate_text || '',
+      rateType: row.rate_type || '',
+      aircraftYear: row.aircraft_year || '',
+      manufacturer: model.manufacturer || '',
+      model: model.model || '',
+      modelIdentifier: model.identifier || '',
+      commonName: model.common_name || ''
+    });
+
+    airportLinks.forEach(link => {
+      const icao = link?.airports?.icao;
+      addAircraftIndexText(airportAircraftIndex, icao, textBlob);
+      if(!icao) return;
+      if(!airportAircraftListingMeta[icao]) airportAircraftListingMeta[icao] = [];
+      airportAircraftListingMeta[icao].push({
+        listingId: row.listing_id,
+        listingType: listing.listing_type || '',
+        text: textBlob
+      });
+    });
+  });
+}
+
+function getAirportNameWithCode(airport){
+  if(!airport) return 'Choose an airport';
+  const code = airport.icao || '';
+  const name = airport.airport_name || code;
+  if(!name) return code;
+  if(!code || name === code) return name;
+  return `${name} (${code})`;
+}
+
+function getActiveAircraftFilter(){
+  return (document.getElementById('filterAircraft')?.value || '').trim().toLowerCase();
+}
+
+function getBaseAirportCounts(airport){
+  return {
+    cfi: airport?.cfi_count || 0,
+    flight_school: airport?.school_count || 0,
+    rental_aircraft: airport?.rental_count || 0,
+    flying_club: airport?.club_count || 0,
+    maintenance: airport?.maintenance_count || 0
+  };
+}
+
+function getAirportDisplayCounts(airport){
+  const aircraftQuery = getActiveAircraftFilter();
+  if(!airport || !aircraftQuery) return getBaseAirportCounts(airport);
+
+  const items = airportAircraftListingMeta[airport.icao] || [];
+  const matched = new Map();
+
+  items.forEach(item => {
+    if(!item?.listingId || !aircraftTextMatches(item.text, aircraftQuery)) return;
+    if(!matched.has(item.listingId)) matched.set(item.listingId, item.listingType || '');
+  });
+
+  const counts = { cfi: 0, flight_school: 0, rental_aircraft: 0, flying_club: 0, maintenance: 0 };
+  matched.forEach(type => {
+    if(type in counts) counts[type] += 1;
+  });
+
+  return counts;
+}
+
+function getCurrentAirportDisplayCounts(){
+  const aircraftQuery = getActiveAircraftFilter();
+  if(!currentAirport) return { cfi: 0, flight_school: 0, rental_aircraft: 0, flying_club: 0, maintenance: 0 };
+  if(!aircraftQuery) return getBaseAirportCounts(currentAirport);
+
+  const counts = { cfi: 0, flight_school: 0, rental_aircraft: 0, flying_club: 0, maintenance: 0 };
+  currentListings
+    .filter(listing => listingMatchesAircraft(listing, aircraftQuery))
+    .forEach(listing => {
+      if(listing?.listing_type in counts) counts[listing.listing_type] += 1;
+    });
+
+  return counts;
+}
+
+function airportMatchesAircraft(a, aircraftQuery){
+  if(!aircraftQuery) return true;
+  const aircraftRows = airportAircraftIndex[a.icao] || [];
+  if(!aircraftRows.length) return false;
+  return aircraftRows.some(text => aircraftTextMatches(text, aircraftQuery));
+}
+
+function listingMatchesAircraft(listing, aircraftQuery){
+  if(!aircraftQuery) return true;
+  const aircraftRows = listingAircraftIndex[listing.id] || [];
+  if(!aircraftRows.length) return false;
+  return aircraftRows.some(text => aircraftTextMatches(text, aircraftQuery));
+}
+
+
+function getAirportActivityScore(a){
+  return (a.cfi_count || 0) + (a.school_count || 0) + (a.rental_count || 0) + (a.club_count || 0) + (a.maintenance_count || 0);
+}
+
+function airportMatchesService(a, serviceType){
+  if(!serviceType) return true;
+  if(serviceType === "cfi") return (a.cfi_count || 0) > 0;
+  if(serviceType === "flight_school") return (a.school_count || 0) > 0;
+  if(serviceType === "rental_aircraft") return (a.rental_count || 0) > 0;
+  if(serviceType === "flying_club") return (a.club_count || 0) > 0;
+  if(serviceType === "maintenance") return (a.maintenance_count || 0) > 0;
+  return true;
+}
+
+
+let aircraftSearchOptions = [
+  "Beechcraft Bonanza A36 BE36/A36", "Beechcraft Bonanza F33 BE33/F33",
+  "Cessna 150 C150", "Cessna 152 C152", "Cessna 172 C172", "Cessna 172M C172M", "Cessna 172N C172N", "Cessna 172P C172P", "Cessna 172R C172R", "Cessna 172S C172S", "Cessna 172 G1000", "Cessna 182 Skylane C182", "Cessna 182P Skylane C182P", "Cessna 182Q Skylane C182Q", "Cessna 182R Skylane C182R",
+  "Cirrus SR20", "Cirrus SR20 G2", "Cirrus SR20 G3", "Cirrus SR22", "Cirrus SR22T",
+  "Diamond DA20", "Diamond DA40", "Diamond DA40 NG", "Diamond DA40-180", "Diamond DA42",
+  "Grumman Yankee AA-1", "Piper PA-28 Cherokee", "Piper Cherokee 140 PA-28-140", "Piper Cherokee 150 PA-28-150", "Piper Cherokee 160 PA-28-160", "Piper Warrior II PA-28-161", "Piper Cherokee 180 PA-28-180", "Piper Archer II PA-28-181", "Piper Arrow PA28R", "Piper Arrow II PA-28R-200", "Piper Seminole PA44", "Remos GX"
+];
+let aircraftSearchOptionsLoaded = false;
+
+async function loadAircraftSearchOptions(){
+  if(aircraftSearchOptionsLoaded) return;
+  aircraftSearchOptionsLoaded = true;
+
+  try{
+    const { data, error } = await sb
+      .from("aircraft_models")
+      .select("manufacturer, model, identifier, common_name")
+      .eq("active", true)
+      .order("manufacturer", { ascending: true })
+      .order("model", { ascending: true });
+
+    if(error || !data?.length) return;
+
+    aircraftSearchOptions = data.map(row => {
+      const label = row.common_name || `${row.manufacturer || ""} ${row.model || ""}`.trim() || row.identifier;
+      const details = [row.identifier, row.manufacturer, row.model]
+        .filter(Boolean)
+        .filter((value, index, arr) => arr.indexOf(value) === index)
+        .join(" · ");
+      return details ? `${label} — ${details}` : label;
+    }).filter(Boolean);
+  } catch(err){
+    console.warn("Aircraft model dropdown could not load:", err);
+  }
+}
+
+function filterAircraftOptions(){
+  const input = document.getElementById("filterAircraft");
+  const results = document.getElementById("aircraftResults");
+  if(!input || !results) return;
+
+  const q = input.value.trim().toLowerCase();
+
+  if(!q){
+    results.classList.remove("open");
+    results.innerHTML = "";
+    applyHomeFilters(false);
+    return;
+  }
+
+  const matches = aircraftSearchOptions
+    .filter(x => x.toLowerCase().includes(q))
+    .slice(0,12);
+
+  if(!matches.length){
+    results.classList.remove("open");
+    results.innerHTML = "";
+    applyHomeFilters(false);
+    return;
+  }
+
+  results.innerHTML = matches.map(model => `
+    <div class="aircraft-option" onclick="selectAircraftOption('${model}')">${model}</div>
+  `).join("");
+
+  results.classList.add("open");
+  applyHomeFilters(false);
+}
+
+function selectAircraftOption(model){
+  const input = document.getElementById("filterAircraft");
+  const results = document.getElementById("aircraftResults");
+  if(input) input.value = model;
+  if(results){
+    results.classList.remove("open");
+    results.innerHTML = "";
+  }
+  applyHomeFilters(true);
+}
+
+document.addEventListener("click", (event) => {
+  const results = document.getElementById("aircraftResults");
+  const input = document.getElementById("filterAircraft");
+  if(!results || !input) return;
+  if(event.target === input || results.contains(event.target)) return;
+  results.classList.remove("open");
+});
+
+
+function applyHomeFilters(shouldSelect){
+  if(!airports.length) return;
+
+  const q = (document.getElementById("searchInput")?.value || "").trim().toLowerCase();
+  const serviceType = document.getElementById("filterServiceType")?.value || "";
+  const aircraft = (document.getElementById("filterAircraft")?.value || "").trim().toLowerCase();
+  const airportCity = (document.getElementById("filterAirportCity")?.value || "").trim().toLowerCase();
+  const onlyAvailable = document.getElementById("filterOnlyAvailable")?.checked ?? true;
+  const sort = document.getElementById("filterSort")?.value || "activity";
+
+  filteredAirports = airports.filter(a => {
+    const hay = `${a.icao || ""} ${a.airport_name || ""} ${a.city || ""} ${a.state || ""}`.toLowerCase();
+
+    const searchOk = !q || hay.includes(q);
+    const cityOk = !airportCity || hay.includes(airportCity);
+    const serviceOk = airportMatchesService(a, serviceType);
+    const availabilityOk = !onlyAvailable || !serviceType || serviceOk;
+
+    const aircraftOk = airportMatchesAircraft(a, aircraft);
+
+    return searchOk && cityOk && serviceOk && availabilityOk && aircraftOk;
+  });
+
+  if(sort === "activity"){
+    filteredAirports.sort((a,b) => getAirportActivityScore(b) - getAirportActivityScore(a));
+  } else if(sort === "icao"){
+    filteredAirports.sort((a,b) => String(a.icao || "").localeCompare(String(b.icao || "")));
+  } else if(sort === "city"){
+    filteredAirports.sort((a,b) => String(a.city || "").localeCompare(String(b.city || "")));
+  }
+
+  renderMarkers();
+  updateFilterSummary({ q, serviceType, aircraft, airportCity });
+
+  if(currentAirport){
+    renderAirportHeader();
+    renderBoard();
+  }
+
+  if(shouldSelect){
+    if(filteredAirports.length === 1){
+      selectAirport(filteredAirports[0].icao, true);
+    } else if(filteredAirports.length > 1){
+      fitMapToFilteredAirports();
+      if(!currentAirport) renderNoAirportSelected();
+    } else {
+      setStatus("No airport matches those filters.");
+    }
+  }
+}
+
+function updateFilterSummary(filters){
+  const el = document.getElementById("filterSummary");
+  if(!el) return;
+
+  const serviceLabel = {
+    cfi: "CFI / instruction",
+    flight_school: "flight school",
+    rental_aircraft: "rental aircraft",
+    flying_club: "flying club",
+    maintenance: "maintenance"
+  }[filters.serviceType] || "";
+
+  const parts = [];
+  if(serviceLabel) parts.push(serviceLabel);
+  if(filters.aircraft) parts.push(`aircraft: ${filters.aircraft.toUpperCase()}`);
+  if(filters.airportCity) parts.push(`airport/city: ${filters.airportCity}`);
+  if(filters.q) parts.push(`search: ${filters.q}`);
+
+  el.textContent = `${filteredAirports.length} airport${filteredAirports.length === 1 ? "" : "s"} match${filteredAirports.length === 1 ? "es" : ""}${parts.length ? " — " + parts.join(" · ") : "."}`;
+
+}
+
+function fitMapToFilteredAirports(){
+  if(!map || !filteredAirports.length) return;
+  const bounds = new mapboxgl.LngLatBounds();
+  filteredAirports.forEach(a => {
+    const coords = getCoords(a);
+    if(coords) bounds.extend(coords);
+  });
+  if(!bounds.isEmpty()){
+    map.fitBounds(bounds, { padding: 90, maxZoom: 8.8, duration: 700 });
+  }
+}
+
+function clearHomeFilters(){
+  const ids = ["searchInput","filterAircraft","filterAirportCity"];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = "";
+  });
+
+  const service = document.getElementById("filterServiceType");
+  if(service) service.value = "";
+  const sort = document.getElementById("filterSort");
+  if(sort) sort.value = "activity";
+  const only = document.getElementById("filterOnlyAvailable");
+  if(only) only.checked = true;
+
+  filteredAirports = [...airports];
+  applyHomeFilters(false);
+  if(!currentAirport) renderNoAirportSelected();
+}
+
+function renderMarkers() {
+  markers.forEach(m => m.remove());
+  markers = [];
+  markerElements = [];
+
+  const bounds = new mapboxgl.LngLatBounds();
+
+  filteredAirports.forEach(a => {
+    const coords = getCoords(a);
+    if(!coords) return;
+
+    bounds.extend(coords);
+
+    const el = document.createElement("div");
+    el.className = "airport-marker";
+    const displayCounts = getAirportDisplayCounts(a);
+    el.innerHTML = `
+      <div class="airport-bubble ${currentAirport && currentAirport.icao === a.icao ? "selected" : ""}">
+        <div class="airport-code">${escapeHtml(a.icao)}</div>
+        <div class="airport-name">${escapeHtml(a.airport_name || "")}</div>
+        <div class="airport-counts">
+          <span class="count-pill blue">${displayCounts.cfi || 0} CFIs</span>
+          <span class="count-pill orange">${displayCounts.flight_school || 0} Schools</span>
+          <span class="count-pill green">${displayCounts.rental_aircraft || 0} Rentals</span>
+          <span class="count-pill purple">${displayCounts.flying_club || 0} Clubs</span>
+        </div>
+      </div>
+    `;
+
+    el.addEventListener("click", () => selectAirport(a.icao, true));
+    markerElements.push(el);
+
+    const marker = new mapboxgl.Marker({ element: el, anchor: "bottom" })
+      .setLngLat(coords)
+      .addTo(map);
+
+    markers.push(marker);
+  });
+
+  if(!bounds.isEmpty()) {
+    map.fitBounds(bounds, { padding: 90, maxZoom: 8.2, duration: 800 });
+  }
+  updateMarkerScale();
+}
+
+
+async function enrichCurrentAirportProfile(){
+  if(!currentAirport || currentAirport.airport_summary) return;
+  const { data, error } = await sb
+    .from("airports")
+    .select("airport_summary, runway_summary, fuel_available, fbo_summary, airport_services_summary, fbo_names, official_airport_url, airport_overview_source_url, managing_authority, address, public_phone, website, notes")
+    .eq("icao", currentAirport.icao)
+    .maybeSingle();
+
+  if(!error && data){
+    currentAirport = { ...currentAirport, ...data };
+  }
+}
+
+
+
+function renderNoAirportSelected(){
+  document.getElementById("boardCode").textContent = "—";
+  document.getElementById("boardTitle").textContent = "Choose an airport";
+  document.getElementById("boardCity").textContent = "Click an airport bubble on the map to open its board. Location only shows where you are.";
+  document.getElementById("statCfis").textContent = 0;
+  document.getElementById("statSchools").textContent = 0;
+  document.getElementById("statRentals").textContent = 0;
+  document.getElementById("statClubs").textContent = 0;
+  document.getElementById("statMx").textContent = 0;
+
+  ["tabCountCfis","tabCountSchools","tabCountRentals","tabCountClubs","tabCountMx"].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = 0;
+  });
+
+  document.getElementById("boardContent").innerHTML = `
+    <div class="empty">
+      Choose an airport from the map to open its board. Your location is only used to center the map.
+      <br><br>
+      <button class="btn primary" onclick="showUserLocation()">Use My Location</button>
+    </div>
+  `;
+}
+
+function distanceMiles(lngLatA, lngLatB){
+  const toRad = deg => deg * Math.PI / 180;
+  const [lng1, lat1] = lngLatA;
+  const [lng2, lat2] = lngLatB;
+  const R = 3958.8;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLng/2) * Math.sin(dLng/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+async function selectNearestAirportTo(coords){
+  if(!airports.length || hasAutoSelectedAirport) return;
+
+  const nearest = airports
+    .map(a => ({ airport: a, coords: getCoords(a) }))
+    .filter(x => x.coords)
+    .map(x => ({ ...x, miles: distanceMiles(coords, x.coords) }))
+    .sort((a,b) => a.miles - b.miles)[0];
+
+  if(nearest){
+    hasAutoSelectedAirport = true;
+    setStatus(`Nearest airport: ${nearest.airport.icao} (${nearest.miles.toFixed(1)} miles away).`);
+    await selectAirport(nearest.airport.icao, false);
+  }
+}
+
+
+async function selectAirport(icao, scroll) {
+  const a = airports.find(x => x.icao === icao);
+  if(!a) return;
+
+  currentAirport = a;
+  await enrichCurrentAirportProfile();
+  currentTab = "overview";
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === "overview"));
+
+  renderMarkers();
+
+  const coords = getCoords(a);
+  if(coords) map.flyTo({ center: coords, zoom: 10.2, duration: 800 });
+
+  await loadListingsForAirport(a.airport_id);
+  await loadFeaturedPlacementsForAirport(a.airport_id);
+  renderAirportHeader();
+  renderBoard();
+
+  if(scroll) {
+    document.getElementById("board").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+function renderAirportHeader() {
+  const a = currentAirport;
+  const displayCounts = getCurrentAirportDisplayCounts();
+  document.getElementById("boardCode").textContent = a.icao;
+  document.getElementById("boardTitle").textContent = getAirportNameWithCode(a);
+  document.getElementById("boardCity").textContent = `${a.city || ""}${a.state ? ", " + a.state : ""} · Real airport board data from Supabase.`;
+  document.getElementById("statCfis").textContent = displayCounts.cfi || 0;
+  document.getElementById("statSchools").textContent = displayCounts.flight_school || 0;
+  document.getElementById("statRentals").textContent = displayCounts.rental_aircraft || 0;
+  document.getElementById("statClubs").textContent = displayCounts.flying_club || 0;
+  document.getElementById("statMx").textContent = displayCounts.maintenance || 0;
+
+  const tabCounts = {
+    tabCountCfis: displayCounts.cfi || 0,
+    tabCountSchools: displayCounts.flight_school || 0,
+    tabCountRentals: displayCounts.rental_aircraft || 0,
+    tabCountClubs: displayCounts.flying_club || 0,
+    tabCountMx: displayCounts.maintenance || 0
+  };
+
+  Object.entries(tabCounts).forEach(([id, count]) => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = count;
+  });
+}
+
+async function loadListingsForAirport(airportId) {
+  const { data, error } = await sb
+    .from("listing_airports")
+    .select("listings(*)")
+    .eq("airport_id", airportId);
+
+  if(error) {
+    currentListings = [];
+    document.getElementById("boardContent").innerHTML = `<div class="empty">Listing load error: ${escapeHtml(error.message)}</div>`;
+    return;
+  }
+
+  currentListings = (data || [])
+    .map(row => row.listings)
+    .filter(Boolean)
+    .filter(listing => String(listing.status || '').toLowerCase() !== 'archived');
+}
+
+
+async function loadFeaturedPlacementsForAirport(airportId){
+  currentFeaturedPlacements = [];
+  if(!airportId) return;
+
+  const { data, error } = await sb
+    .from("featured_listing_placements")
+    .select("id, listing_id, airport_id, placement_type, status, billing_status, price_cents")
+    .eq("airport_id", airportId)
+    .eq("status", "active")
+    .eq("placement_type", "featured_airport_listing");
+
+  if(error){
+    console.warn("Featured placements could not load:", error.message);
+    currentFeaturedPlacements = [];
+    return;
+  }
+
+  currentFeaturedPlacements = data || [];
+}
+
+function isListingFeaturedAtCurrentAirport(listing){
+  if(!listing) return false;
+  return Boolean(listing.featured) || currentFeaturedPlacements.some(p => p.listing_id === listing.id);
+}
+
+function getFeaturedListingsForCurrentAirport(){
+  const featuredIds = new Set(currentFeaturedPlacements.map(p => p.listing_id));
+  return currentListings.filter(listing => featuredIds.has(listing.id) || listing.featured).slice(0,3);
+}
+
+function renderFeaturedAirportStrip(){
+  const featured = getFeaturedListingsForCurrentAirport();
+  if(!featured.length){
+    return `
+      <section class="featured-airport-strip">
+        <div class="featured-strip-head">
+          <div>
+            <strong>Featured near ${escapeHtml(currentAirport?.icao || 'this airport')}</strong>
+            <span>Reserved premium placement for local CFIs, clubs, schools, shops, and aircraft access.</span>
+          </div>
+          <button class="btn primary" onclick="openFeaturedUpgradeModal()">Feature a Listing</button>
+        </div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="featured-airport-strip">
+      <div class="featured-strip-head">
+        <div>
+          <strong>Featured near ${escapeHtml(currentAirport?.icao || 'this airport')}</strong>
+          <span>Paid local placement for pilots searching this airport.</span>
+        </div>
+        <button class="btn primary" onclick="openFeaturedUpgradeModal()">Feature a Listing</button>
+      </div>
+      <div class="featured-strip-grid">
+        ${featured.map(listing => `
+          <div class="featured-strip-card">
+            <small>${escapeHtml(typeLabels[listing.listing_type] || listing.listing_type)}</small>
+            <strong>${escapeHtml(listing.title || listing.business_name || 'Featured listing')}</strong>
+            <span>${escapeHtml(listing.business_name || listing.contact_name || currentAirport?.icao || '')}</span>
+          </div>
+        `).join('')}
+      </div>
+    </section>
+  `;
+}
+
+function selectTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
+  renderBoard();
+}
+
+async function renderBoard() {
+  const content = document.getElementById("boardContent");
+
+  if(!currentAirport) {
+    content.innerHTML = `<div class="empty">Select an airport from the map.</div>`;
+    return;
+  }
+
+  const boardHelper = `
+    <div class="board-helper compact">
+      <div>
+        <strong>${currentAirport.icao} airport board</strong>
+        <span>Browse by category below, or add a local aviation service for this airport.</span>
+      </div>
+      <button class="btn primary" onclick="openSubmitModal()">Add a Service at ${currentAirport.icao}</button>
+    </div>
+  `;
+
+  if(currentTab === "overview") {
+    const displayCounts = getCurrentAirportDisplayCounts();
+    const hasTraining = (displayCounts.cfi || 0) > 0 || (displayCounts.flight_school || 0) > 0;
+    const hasAircraft = (displayCounts.rental_aircraft || 0) > 0 || (displayCounts.flying_club || 0) > 0;
+    const hasMx = (displayCounts.maintenance || 0) > 0;
+
+    const airportSummary = currentAirport.airport_summary || `${currentAirport.airport_name || currentAirport.icao} is a local airport. Nearby Flyer shows the services currently posted here so pilots can quickly understand what is available.`;
+    const fboNames = Array.isArray(currentAirport.fbo_names) && currentAirport.fbo_names.length
+      ? currentAirport.fbo_names.join(" · ")
+      : "";
+    const fboInfo = fboNames || currentAirport.airport_services_summary || currentAirport.fbo_summary || "FBO and airport service information coming soon.";
+    const runwaySummary = currentAirport.runway_summary || "Runway information coming soon";
+    const fuelInfo = currentAirport.fuel_available || "Fuel information coming soon";
+    const officialSource = currentAirport.official_airport_url || currentAirport.airport_overview_source_url || currentAirport.website || "";
+    const authority = currentAirport.managing_authority || "";
+
+    content.innerHTML = boardHelper + renderFeaturedAirportStrip() + `
+<div class="airport-overview-simple">
+        <section class="airport-summary-feature">
+          <div class="overview-kicker">Airport snapshot</div>
+          <h3>${escapeHtml(getAirportNameWithCode(currentAirport))}</h3>
+          <p>${escapeHtml(airportSummary)}</p>
+          <div class="overview-source-row">
+            <span class="overview-source-pill">📍 ${escapeHtml(currentAirport.city || currentAirport.icao)}${currentAirport.state ? ", " + escapeHtml(currentAirport.state) : ""}</span>
+            ${authority ? `<span class="overview-source-pill">🏛 ${escapeHtml(authority)}</span>` : ""}
+            ${officialSource ? `<span class="overview-source-pill">🔗 Official source saved</span>` : ""}
+          </div>
+          ${officialSource ? `<div class="actions" style="margin-top:16px"><button onclick="window.open('${escapeHtml(officialSource)}','_blank')">Open Official Airport Info</button></div>` : ""}
+        </section>
+
+        <aside class="overview-mini-grid">
+          <div class="overview-mini-card">
+            <div class="overview-mini-top"><div class="overview-mini-icon">⛽</div><h4>FBOs / airport services</h4></div>
+            <p>${escapeHtml(fboInfo)}</p>
+          </div>
+
+          <div class="overview-mini-card">
+            <div class="overview-mini-top"><div class="overview-mini-icon">🛬</div><h4>Fuel and runways</h4></div>
+            <p><strong>Fuel:</strong> ${escapeHtml(fuelInfo)}<br><strong>Runways:</strong> ${escapeHtml(runwaySummary)}</p>
+          </div>
+
+          <div class="overview-mini-card">
+            <div class="overview-mini-top"><div class="overview-mini-icon">✈️</div><h4>Best next step</h4></div>
+            <p>${hasTraining ? "Compare the CFIs and schools first. Look for ratings, rates, aircraft used, and availability." : "This airport needs more posted services. A local CFI, aircraft owner, school, club, or shop can post a listing."} ${hasAircraft ? "Aircraft access is listed here too." : ""} ${hasMx ? "Maintenance support is listed here as well." : ""}</p>
+          </div>
+        </aside>
+      </div>`;
+    return;
+  }
+
+  const aircraftFilter = (document.getElementById("filterAircraft")?.value || "").trim().toLowerCase();
+  const filtered = currentListings.filter(l => l.listing_type === currentTab && listingMatchesAircraft(l, aircraftFilter)).sort((a,b) => Number(isListingFeaturedAtCurrentAirport(b)) - Number(isListingFeaturedAtCurrentAirport(a)));
+
+  if(!filtered.length) {
+    content.innerHTML = boardHelper + `
+      <div class="empty">
+        No ${typeLabels[currentTab] || currentTab} listings at ${currentAirport.icao} match the current filters yet.
+        <br><br>
+        <button class="btn primary" onclick="openSubmitModal()">Post the first one</button>
+      </div>`;
+    return;
+  }
+
+  await preloadListingCardPhotos(filtered);
+  await preloadListingCardDetails(filtered);
+
+  content.innerHTML = boardHelper + filtered.map(l => {
+    const photo = listingPhotoCache[l.id];
+    const title = escapeHtml(l.title || l.business_name || "Untitled listing");
+    const contact = escapeHtml(l.business_name || l.contact_name || "");
+    const detail = listingDetailCache[l.id] || null;
+    const aircraftRateCards = getAircraftRateCards(l, detail);
+    const desc = escapeHtml(getNormalizedListingDescription(l, detail, aircraftRateCards));
+    const quickFacts = getListingQuickFacts(l);
+    const highlights = getListingHighlights(l, detail, aircraftRateCards);
+
+    return `
+    <article class="listing">
+      <div class="listing-visual">
+        ${photo ? `<img src="${escapeHtml(photo)}" alt="${title}">` : `<div class="visual-fallback ${escapeHtml(l.listing_type)}">${getListingVisualMark(l.listing_type)}</div>`}
+        <div class="listing-visual-badges">
+          <span class="listing-visual-badge">${escapeHtml(typeLabels[l.listing_type] || l.listing_type)}</span>
+          <span class="listing-visual-badge">${escapeHtml(currentAirport.icao)}</span>
+          ${isListingFeaturedAtCurrentAirport(l) ? `<span class="listing-visual-badge featured-badge-gold">Featured</span>` : ""}
+        </div>
+        <div class="listing-visual-title">
+          <small>${contact || "Nearby Flyer listing"}</small>
+          <strong>${title}</strong>
+        </div>
+      </div>
+
+      <div class="listing-body">
+        <div class="chips">
+          <span class="chip blue">${escapeHtml(typeLabels[l.listing_type] || l.listing_type)}</span>
+          <span class="chip green">${escapeHtml(l.status || "Active")}</span>
+          ${isListingFeaturedAtCurrentAirport(l) ? `<span class="chip featured-badge-gold">★ Featured</span>` : ""}
+          ${l.verified ? `<span class="chip green">✓ Verified</span>` : ""}
+        </div>
+        <div class="meta">${contact}</div>
+        <p class="desc">${desc}</p>
+        ${aircraftRateCards.length ? `<div class="aircraft-rate-list">${aircraftRateCards.map(card => `
+          <div class="aircraft-rate-card">
+            <span class="plane-name">${escapeHtml(card.name)}</span>
+            ${card.meta ? `<span class="plane-meta">${escapeHtml(card.meta)}</span>` : ''}
+            ${card.rate ? `<span class="plane-rate">${escapeHtml(card.rate)}</span>` : `<span class="plane-empty">Rate pending</span>`}
+          </div>
+        `).join('')}</div>` : ''}
+        ${highlights.length ? `<div class="listing-highlights">${highlights.map(h => `
+          <div class="listing-highlight ${h.primary ? 'primary' : ''}">
+            <span class="label">${escapeHtml(h.label)}</span>
+            <span class="value">${escapeHtml(h.value)}</span>
+          </div>
+        `).join('')}</div>` : ''}
+        <div class="quick-facts">
+          ${quickFacts.map(f => `
+            <div class="quick-fact">
+              <span class="label">${escapeHtml(f.label)}</span>
+              <span class="value">${escapeHtml(f.value)}</span>
+            </div>
+          `).join("")}
+        </div>
+        ${!isListingFeaturedAtCurrentAirport(l) ? `<div class="upgrade-featured-card">
+          <div><strong>Want this listing above the rest?</strong><span>Featured listings start at $19/mo per airport and appear higher on airport boards.</span></div>
+          <button class="btn primary" onclick="openFeaturedUpgradeModal('${l.id}')">Upgrade</button>
+        </div>` : ''}
+        <div class="actions">
+          <button class="primary" onclick="openListingDetail('${l.id}')">View Profile</button>
+          ${l.phone ? `<button>☎ ${escapeHtml(l.phone)}</button>` : ""}
+          ${l.email ? `<button>✉ Email</button>` : ""}
+          ${l.website ? `<button>Website</button>` : ""}
+        </div>
+      </div>
+    </article>
+  `}).join("");
+}
+
+
+
+
+function getDetailTableForType(type){
+  const tableMap = {
+    cfi: "cfi_details",
+    rental_aircraft: "rental_details",
+    flying_club: "club_details",
+    maintenance: "maintenance_details"
+  };
+  return tableMap[type] || null;
+}
+
+async function preloadListingCardDetails(listings){
+  const grouped = {};
+
+  (listings || []).forEach(listing => {
+    if(!listing || !listing.id || listingDetailCache[listing.id]) return;
+    const table = getDetailTableForType(listing.listing_type);
+    if(!table) return;
+    if(!grouped[table]) grouped[table] = [];
+    grouped[table].push(listing.id);
+  });
+
+  await Promise.all(Object.entries(grouped).map(async ([table, ids]) => {
+    if(!ids.length) return;
+    const { data, error } = await sb
+      .from(table)
+      .select("*")
+      .in("listing_id", ids);
+
+    if(error) return;
+
+    (data || []).forEach(row => {
+      if(row && row.listing_id) listingDetailCache[row.listing_id] = row;
+    });
+
+    ids.forEach(id => {
+      if(!(id in listingDetailCache)) listingDetailCache[id] = null;
+    });
+  }));
+}
+
+function extractPriceText(text){
+  if(!text) return "";
+  const match = String(text).match(/\$\s?\d[\d,]*(?:\.\d{1,2})?(?:\s*\/\s*[A-Za-z]+)?(?:\s*(?:wet|dry))?/i);
+  return match ? match[0].replace(/\s+/g,' ').trim() : "";
+}
+
+function extractAircraftText(text){
+  if(!text) return "";
+  const raw = String(text).trim();
+  const first = raw.split(/\s*[,;|]\s*|\s+and\s+/i).find(Boolean) || raw;
+  return first.length > 42 ? `${first.slice(0,39)}...` : first;
+}
+
+function compactList(values, maxItems = 2, maxLength = 48){
+  const cleaned = [...new Set((values || []).map(v => String(v || '').trim()).filter(Boolean))];
+  if(!cleaned.length) return '';
+  const joined = cleaned.slice(0, maxItems).join(' · ');
+  return joined.length > maxLength ? `${joined.slice(0, maxLength - 3)}...` : joined;
+}
+
+function formatRateWithType(rateText, rateType, fallbackType = ''){
+  const rate = String(rateText || '').trim();
+  if(!rate) return '';
+  const lowerRate = rate.toLowerCase();
+  const type = String(rateType || fallbackType || '').trim().toLowerCase();
+  if(!type || type === 'unknown' || type === 'not_applicable') return rate;
+  if(lowerRate.includes('wet') || lowerRate.includes('dry')) return rate;
+  return `${rate} ${type}`;
+}
+
+function getAircraftRowsForListing(listingId){
+  return Array.isArray(listingAircraftDetails[listingId]) ? listingAircraftDetails[listingId] : [];
+}
+
+function prettifyAircraftIdentifier(identifier){
+  const raw = String(identifier || '').trim();
+  if(!raw) return '';
+  const code = raw.toUpperCase().replace(/\s+/g, '');
+
+  const exactMap = {
+    'SR-20': 'Cirrus SR20',
+    'SR20': 'Cirrus SR20',
+    'SR-22': 'Cirrus SR22',
+    'SR22': 'Cirrus SR22',
+    'C-150': 'Cessna 150',
+    'C150': 'Cessna 150',
+    'C-152': 'Cessna 152',
+    'C152': 'Cessna 152',
+    'C-172': 'Cessna 172',
+    'C172': 'Cessna 172',
+    'PA-28-140': 'Piper Cherokee 140',
+    'PA28-140': 'Piper Cherokee 140',
+    'PA-28-161': 'Piper Warrior II',
+    'PA28-161': 'Piper Warrior II',
+    'PA-28-180': 'Piper Cherokee 180',
+    'PA28-180': 'Piper Cherokee 180'
+  };
+  if(exactMap[code]) return exactMap[code];
+
+  if(/^C-?17/i.test(code)) return 'Cessna 172';
+  if(/^C-?15/i.test(code)) return 'Cessna 150';
+  if(/^SR-?20/i.test(code)) return 'Cirrus SR20';
+  if(/^SR-?22/i.test(code)) return 'Cirrus SR22';
+  if(/^PA-?28-161/i.test(code)) return 'Piper Warrior II';
+  if(/^PA-?28-180/i.test(code)) return 'Piper Cherokee 180';
+  if(/^PA-?28/i.test(code)) return 'Piper PA-28';
+
+  return raw;
+}
+
+function getAircraftDisplayName(row){
+  if(row.commonName) return row.commonName;
+  const manufacturerModel = [row.manufacturer, row.model].filter(Boolean).join(' ').trim();
+  if(manufacturerModel) return manufacturerModel;
+  return prettifyAircraftIdentifier(row.modelIdentifier || row.aircraftIdentifier || 'Aircraft') || 'Aircraft';
+}
+
+function splitAircraftList(text){
+  const raw = String(text || '').trim();
+  if(!raw) return [];
+  return [...new Set(raw
+    .replace(/aircraft(?: available)?\s*:?/ig, '')
+    .split(/\s*\|\s*|\s*;\s*|\s*,\s*|\s+and\s+/i)
+    .map(part => part.trim())
+    .filter(Boolean))];
+}
+
+function extractRateMatches(text){
+  const raw = String(text || '');
+  if(!raw) return [];
+  const matches = raw.match(/\$\s?\d[\d,]*(?:\.\d{1,2})?\s*\/\s*hr(?:\s*(?:wet|dry))?/ig) || raw.match(/\$\s?\d[\d,]*(?:\.\d{1,2})?(?:\s*(?:wet|dry))?/ig) || [];
+  return [...new Set(matches.map(match => match.replace(/\s+/g, ' ').trim()))];
+}
+
+function getFallbackAircraftRateCards(listing, detail){
+  const cards = [];
+
+  if(listing.listing_type === 'cfi'){
+    const names = splitAircraftList(detail?.aircraft_text || '');
+    const rates = extractRateMatches(detail?.aircraft_rate_text || listing.description || '');
+    if(names.length){
+      names.forEach((name, index) => {
+        const prettyName = prettifyAircraftIdentifier(name);
+        cards.push({ name: prettyName || name, meta: prettyName && prettyName !== name ? name : '', rate: rates[index] || '' });
+      });
+      return cards;
+    }
+  }
+
+  if(listing.listing_type === 'rental_aircraft'){
+    const rawName = detail?.aircraft_make_model || detail?.aircraft_identifier || '';
+    const prettyName = prettifyAircraftIdentifier(rawName);
+    const rate = formatRateWithType(detail?.rate_text, '', detail?.wet_or_dry) || extractPriceText(listing.description);
+    if(rawName || rate) cards.push({ name: prettyName || rawName || 'Aircraft', meta: prettyName && rawName && prettyName !== rawName ? rawName : (detail?.tail_number ? `Tail ${detail.tail_number}` : ''), rate });
+    return cards;
+  }
+
+  if(listing.listing_type === 'flying_club'){
+    const names = splitAircraftList(detail?.fleet_summary || '');
+    if(names.length) names.slice(0,4).forEach(name => {
+      const prettyName = prettifyAircraftIdentifier(name);
+      cards.push({ name: prettyName || name, meta: prettyName && prettyName !== name ? name : '', rate: '' });
+    });
+  }
+
+  return cards;
+}
+
+function getNormalizedListingDescription(listing, detail, aircraftRateCards){
+  const raw = String(listing.description || '').trim();
+  if(!raw) return 'No description yet.';
+  if(!aircraftRateCards || !aircraftRateCards.length) return raw;
+
+  const sentences = raw.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
+  const cleaned = sentences.filter(sentence => !/(^aircraft|aircraft available|aircraft:|fleet:|\$\s?\d|\/hr|wet|dry)/i.test(sentence));
+  const joined = cleaned.join(' ').trim();
+  if(joined) return joined;
+
+  if(listing.listing_type === 'cfi') return 'Instructor profile. Aircraft and rental rates are shown below.';
+  if(listing.listing_type === 'rental_aircraft') return 'Aircraft details and rates are shown below.';
+  return raw;
+}
+
+function getAircraftRateCards(listing, detail){
+  const rows = getAircraftRowsForListing(listing.id);
+  if(rows.length){
+    return rows.map(row => {
+      const name = getAircraftDisplayName(row);
+      const identifier = row.modelIdentifier || row.aircraftIdentifier || '';
+      const metaParts = [identifier, row.tailNumber ? `Tail ${row.tailNumber}` : '', row.aircraftYear || ''].filter(Boolean);
+      return {
+        name,
+        meta: metaParts.join(' · '),
+        rate: formatRateWithType(row.hourlyRateText, row.rateType),
+        identifier
+      };
+    }).sort((a,b) => String(a.name || '').localeCompare(String(b.name || '')));
+  }
+
+  return getFallbackAircraftRateCards(listing, detail || {});
+}
+
+
+function getListingHighlights(listing, detail, aircraftRateCards = []){
+  const highlights = [];
+  const hasAircraftCards = Array.isArray(aircraftRateCards) && aircraftRateCards.length > 0;
+  let instructorPriceText = '';
+  let priceText = '';
+
+  if(listing.listing_type === 'cfi'){
+    instructorPriceText = detail?.instruction_rate_text || '';
+  } else if(listing.listing_type === 'flying_club'){
+    priceText = detail?.monthly_dues || detail?.initiation_fee || extractPriceText(listing.description);
+  } else if(listing.listing_type === 'maintenance'){
+    priceText = detail?.labor_rate || extractPriceText(listing.description);
+  } else if(listing.listing_type === 'rental_aircraft' && !hasAircraftCards) {
+    priceText = formatRateWithType(detail?.rate_text, '', detail?.wet_or_dry) || extractPriceText(listing.description);
+  }
+
+  if(listing.listing_type === 'cfi'){
+    if(instructorPriceText) highlights.push({ label: 'Instructor Price', value: instructorPriceText, primary: false });
+  } else if(priceText) {
+    highlights.push({ label: 'Price', value: priceText, primary: false });
+  }
+
+  return highlights.slice(0,2);
+}
+
+
+async function preloadListingCardPhotos(listings){
+  const ids = (listings || []).map(l => l.id).filter(Boolean).filter(id => !(id in listingPhotoCache));
+  if(!ids.length) return;
+
+  const { data, error } = await sb
+    .from("listing_photos")
+    .select("listing_id, photo_url, sort_order")
+    .in("listing_id", ids)
+    .eq("is_public", true)
+    .order("sort_order", { ascending: true });
+
+  if(error){
+    ids.forEach(id => {
+      if(!(id in listingPhotoCache)) listingPhotoCache[id] = null;
+    });
+    return;
+  }
+
+  const grouped = {};
+  (data || []).forEach(row => {
+    if(!grouped[row.listing_id]) grouped[row.listing_id] = row.photo_url;
+  });
+
+  ids.forEach(id => {
+    listingPhotoCache[id] = grouped[id] || null;
+  });
+}
+
+function getListingVisualMark(type){
+  const marks = {
+    cfi: "CFI",
+    flight_school: "FS",
+    rental_aircraft: "AC",
+    flying_club: "CL",
+    maintenance: "MX"
+  };
+  return marks[type] || "NF";
+}
+
+function getListingQuickFacts(listing){
+  const facts = [];
+  facts.push({ label: "Airport", value: currentAirport?.icao || "Local" });
+  facts.push({ label: "Trust", value: listing.verified ? "Verified" : "Community listing" });
+
+  if(listing.phone) facts.push({ label: "Reach out", value: "Call / text" });
+  else if(listing.email) facts.push({ label: "Reach out", value: "Email" });
+  else if(listing.website) facts.push({ label: "Reach out", value: "Website" });
+
+  if(listing.featured) facts.push({ label: "Featured", value: "Yes" });
+
+  return facts.slice(0, 4);
+}
+
+function showUserLocation(){
+  if(!navigator.geolocation){
+    setStatus("Your browser does not support location.");
+    return;
+  }
+
+  setStatus("Finding your location…");
+
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      const coords = [pos.coords.longitude, pos.coords.latitude];
+
+      if(userMarker) userMarker.remove();
+
+      const el = document.createElement("div");
+      el.className = "user-location-marker";
+      el.innerHTML = '<div class="user-location-dot"></div>';
+
+      userMarker = new mapboxgl.Marker({ element: el, anchor: "center" })
+        .setLngLat(coords)
+        .addTo(map);
+
+      map.flyTo({ center: coords, zoom: 9.5, duration: 900 });
+
+      setStatus("Location shown on the map.");
+      if(!currentAirport) renderNoAirportSelected();
+    },
+    () => {
+      setStatus("Location permission was denied or unavailable. Choose an airport from the map or search by airport/city.");
+      if(!currentAirport) renderNoAirportSelected();
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+  );
+}
+
+
+
+async function openListingDetail(listingId){
+  const listing = currentListings.find(l => l.id === listingId);
+  if(!listing) return;
+
+  document.getElementById("listingPage").classList.add("open");
+  document.body.style.overflow = "hidden";
+
+  document.getElementById("detailTitle").textContent = listing.title || listing.business_name || "Untitled listing";
+  document.getElementById("detailSubtitle").textContent = [
+    typeLabels[listing.listing_type] || listing.listing_type,
+    listing.business_name,
+    currentAirport ? currentAirport.icao : ""
+  ].filter(Boolean).join(" · ");
+
+  document.getElementById("detailDescription").textContent = listing.description || "No description has been added yet.";
+
+  document.getElementById("detailChips").innerHTML = [
+    typeLabels[listing.listing_type] || listing.listing_type,
+    listing.status || "Active",
+    listing.verified ? "Verified" : "Unverified",
+    currentAirport ? currentAirport.icao : ""
+  ].filter(Boolean).map(x => `<span class="detail-chip">${escapeHtml(x)}</span>`).join("");
+
+  document.getElementById("detailHeroActions").innerHTML = `
+    ${listing.phone ? `<button class="primary">☎ ${escapeHtml(listing.phone)}</button>` : ""}
+    ${listing.email ? `<button>✉ Email</button>` : ""}
+    ${listing.website ? `<button>Website</button>` : ""}
+    <button onclick="openClaimModal('${listing.id}')">Claim Listing</button>
+  `;
+
+  renderDetailBasics(listing);
+  renderHeroIdentity(listing, []);
+  renderDetailPhotos([]);
+
+  const [detail, photos] = await Promise.all([
+    loadListingTypeDetails(listing),
+    loadListingPhotos(listing.id)
+  ]);
+
+  renderTypeSpecificDetails(listing, detail || {});
+  renderHeroIdentity(listing, photos || []);
+  renderDetailPhotos(photos || []);
+}
+
+function closeListingPage(){
+  document.getElementById("listingPage").classList.remove("open");
+  document.body.style.overflow = "";
+}
+
+async function loadListingPhotos(listingId){
+  const { data, error } = await sb
+    .from("listing_photos")
+    .select("*")
+    .eq("listing_id", listingId)
+    .eq("is_public", true)
+    .order("sort_order", { ascending: true });
+
+  if(error) return [];
+  return data || [];
+}
+
+async function loadListingTypeDetails(listing){
+  const table = getDetailTableForType(listing.listing_type);
+  if(!table) return null;
+
+  const { data, error } = await sb
+    .from(table)
+    .select("*")
+    .eq("listing_id", listing.id)
+    .maybeSingle();
+
+  if(error) return null;
+  return data;
+}
+
+function renderDetailBasics(listing){
+  document.getElementById("detailGrid").innerHTML = [
+    ["Category", typeLabels[listing.listing_type] || listing.listing_type],
+    ["Status", listing.status || "Active"],
+    ["Verified", listing.verified ? "Yes" : "Not yet"],
+    ["Featured", listing.featured ? "Yes" : "No"],
+    ["Airport", currentAirport ? `${currentAirport.airport_name || currentAirport.icao} (${currentAirport.icao})` : ""],
+    ["Date Added", listing.date_added || ""]
+  ].map(([label,value]) => detailItem(label,value || "—")).join("");
+
+  document.getElementById("detailContactGrid").innerHTML = [
+    ["Contact", listing.contact_name || listing.business_name || "—"],
+    ["Business", listing.business_name || "—"],
+    ["Phone", listing.phone || "—"],
+    ["Email", listing.email || "—"],
+    ["Website", listing.website || "—"]
+  ].map(([label,value]) => detailItem(label,value)).join("");
+
+  document.getElementById("detailAircraftGrid").innerHTML = [
+    ["Services", "Loading details…"]
+  ].map(([label,value]) => detailItem(label,value)).join("");
+}
+
+function renderTypeSpecificDetails(listing, detail){
+  let rows = [];
+  const aircraftRows = getAircraftRowsForListing(listing.id);
+  const aircraftSummary = aircraftRows.length
+    ? aircraftRows.map(row => {
+        const name = getAircraftDisplayName(row);
+        const id = row.modelIdentifier || row.aircraftIdentifier || '';
+        const tail = row.tailNumber ? `Tail ${row.tailNumber}` : '';
+        const rate = formatRateWithType(row.hourlyRateText, row.rateType);
+        return [name, id, tail, rate].filter(Boolean).join(' · ');
+      }).join(' | ')
+    : '';
+
+  if(listing.listing_type === "cfi"){
+    rows = [
+      ["Ratings", Array.isArray(detail.ratings) ? detail.ratings.join(" · ") : "—"],
+      ["Instructor Rate", detail.instruction_rate_text || "—"],
+      ["Aircraft Offered", aircraftSummary || detail.aircraft_text || "—"],
+      ["Aircraft Rate Source", aircraftRows.length ? "Linked aircraft records" : (detail.aircraft_rate_text || "—")],
+      ["Dual / Total", detail.total_dual_text || detail.flight_hours_text || "—"],
+      ["Discovery Flights", detail.discovery_flights_text || "—"],
+      ["Availability", detail.availability || "—"]
+    ];
+  } else if(listing.listing_type === "rental_aircraft"){
+    rows = [
+      ["Aircraft", aircraftSummary || detail.aircraft_make_model || "—"],
+      ["Year", detail.aircraft_year || (aircraftRows[0]?.aircraftYear || "—")],
+      ["Tail Number", detail.tail_number || aircraftRows[0]?.tailNumber || detail.aircraft_identifier || "Add field"],
+      ["Rate", formatRateWithType(detail.rate_text, '', detail.wet_or_dry) || formatRateWithType(aircraftRows[0]?.hourlyRateText, aircraftRows[0]?.rateType) || "—"],
+      ["Wet / Dry", detail.wet_or_dry || aircraftRows[0]?.rateType || "—"],
+      ["Membership Required", detail.membership_required || "—"],
+      ["Checkout Requirements", detail.checkout_requirements || "—"],
+      ["Insurance Requirements", detail.insurance_requirements || "—"]
+    ];
+  } else if(listing.listing_type === "flying_club"){
+    rows = [
+      ["Fleet", aircraftSummary || detail.fleet_summary || "—"],
+      ["Initiation Fee", detail.initiation_fee || "—"],
+      ["Monthly Dues", detail.monthly_dues || "—"],
+      ["CFI Available", detail.cfi_available || "—"],
+      ["CFI Count", detail.cfi_count || "—"],
+      ["Training Days", detail.training_days || "—"],
+      ["DPE Available", detail.dpe_available || "—"]
+    ];
+  } else if(listing.listing_type === "maintenance"){
+    rows = [
+      ["IA On Staff", detail.ia_on_staff || "—"],
+      ["Services", detail.services || "—"],
+      ["Aircraft Experience", detail.aircraft_experience || "—"],
+      ["Labor Rate", detail.labor_rate || "—"]
+    ];
+  } else {
+    rows = [["Services", "Details coming soon"]];
+  }
+
+  document.getElementById("detailAircraftGrid").innerHTML = rows.map(([label,value]) => detailItem(label,value)).join("");
+}
+
+function renderProfileHangarAircraft(listing, photos){
+  const rows = getAircraftRowsForListing(listing.id);
+  const aircraftCard = document.getElementById('detailAircraftGrid')?.closest('.detail-card');
+  if(!aircraftCard) return;
+
+  let hangar = document.getElementById('profileHangarCard');
+  if(!hangar){
+    hangar = document.createElement('div');
+    hangar.className = 'detail-card';
+    hangar.id = 'profileHangarCard';
+    hangar.style.marginTop = '16px';
+    aircraftCard.insertAdjacentElement('afterend', hangar);
+  }
+
+  if(!rows.length){
+    hangar.innerHTML = `
+      <h3>Aircraft / Future Hangar</h3>
+      <p class="detail-note">This area is ready for future aircraft profiles: photos, tail numbers, aircraft model, avionics, checkout notes, and hangar/community details.</p>
+    `;
+    return;
+  }
+
+  hangar.innerHTML = `
+    <h3>Aircraft / Future Hangar</h3>
+    <div class="hangar-aircraft-grid">
+      ${rows.map((row, index) => `
+        <div class="hangar-aircraft-card">
+          <div class="hangar-aircraft-photo">✈</div>
+          <div class="hangar-aircraft-body">
+            <strong>${escapeHtml(getAircraftDisplayName(row))}</strong>
+            <span>${escapeHtml([row.tailNumber ? `Tail ${row.tailNumber}` : '', row.modelIdentifier || row.aircraftIdentifier || '', row.aircraftYear || ''].filter(Boolean).join(' · ') || 'Model / tail details can be added')}</span>
+            ${formatRateWithType(row.hourlyRateText, row.rateType) ? `<div class="plane-rate">${escapeHtml(formatRateWithType(row.hourlyRateText, row.rateType))}</div>` : ''}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+    <p class="detail-note">Future hangar feature: CFIs and owners can attach aircraft photos, tail number, model, avionics, checkout notes, rate type, and ownership/rental availability here.</p>
+  `;
+}
+
+function renderHeroIdentity(listing, photos){
+  const avatar = document.getElementById("detailAvatar");
+  const banner = document.getElementById("detailHeroPhotos");
+  const initials = getInitials(listing.title || listing.business_name || listing.contact_name || "NF");
+
+  if(photos && photos.length){
+    const bannerPhotos = photos.slice(0, 2);
+    banner.innerHTML = bannerPhotos.map(p => `<img src="${escapeHtml(p.photo_url)}" alt="${escapeHtml(p.photo_type || "Listing banner")}">`).join("");
+    avatar.innerHTML = `<img src="${escapeHtml(photos[0].photo_url)}" alt="${escapeHtml(listing.title || "Profile photo")}">`;
+  } else {
+    banner.innerHTML = `
+      <div style="background:linear-gradient(135deg,rgba(37,99,235,.72),rgba(56,189,248,.40));width:100%;height:100%"></div>
+      <div style="background:linear-gradient(135deg,rgba(15,23,42,.22),rgba(37,99,235,.26));width:100%;height:100%"></div>
+    `;
+    avatar.textContent = initials;
+  }
+}
+
+function getInitials(name){
+  return String(name || "")
+    .trim()
+    .split(/\s+/)
+    .slice(0,2)
+    .map(part => part[0] || "")
+    .join("")
+    .toUpperCase() || "NF";
+}
+
+function renderDetailPhotos(photos){
+  const grid = document.getElementById("detailPhotoGrid");
+
+  if(!photos.length){
+    grid.innerHTML = `
+      <div class="photo-tile">✈</div>
+      <div class="photo-tile">📷</div>
+      <div class="photo-tile">+</div>
+    `;
+    return;
+  }
+
+  grid.innerHTML = photos.map(p => `
+    <div class="photo-tile">
+      <img src="${escapeHtml(p.photo_url)}" alt="${escapeHtml(p.photo_type || "Listing photo")}">
+    </div>
+  `).join("");
+}
+
+function detailItem(label,value){
+  return `<div class="detail-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || "—")}</strong></div>`;
+}
+
+
+
+/* ===== BUTTON / MODAL / MVP FORM HANDLERS RESTORED ===== */
+
+
+let selectedFeaturedListingId = null;
+
+function openFeaturedUpgradeModal(listingId){
+  selectedFeaturedListingId = listingId || null;
+  const modal = document.getElementById("featuredUpgradeModal");
+  const copy = document.getElementById("featuredUpgradeCopy");
+  const listing = selectedFeaturedListingId ? currentListings.find(l => l.id === selectedFeaturedListingId) : null;
+
+  if(copy){
+    copy.textContent = listing
+      ? `${listing.title || listing.business_name || 'This listing'} can be featured at ${currentAirport?.icao || 'this airport'} for $19/month.`
+      : `Feature a listing at ${currentAirport?.icao || 'this airport'} for $19/month.`;
+  }
+
+  modal?.classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+
+function closeFeaturedUpgradeModal(){
+  document.getElementById("featuredUpgradeModal")?.classList.remove("open");
+  selectedFeaturedListingId = null;
+  if(!document.querySelector(".mvp-modal.open, .listing-page.open, .feature-page.open")) document.body.style.overflow = "";
+}
+
+async function requestFeaturedPlacement(){
+  const note = document.getElementById("featuredUpgradeNote");
+  const listingId = selectedFeaturedListingId || currentListings[0]?.id;
+  if(!listingId || !currentAirport?.airport_id){
+    if(note) note.textContent = "Choose an airport and listing first.";
+    return;
+  }
+
+  if(note) note.textContent = "Saving featured placement request…";
+
+  const listing = currentListings.find(l => l.id === listingId);
+  const { error } = await sb
+    .from("featured_listing_upgrade_requests")
+    .insert({
+      listing_id: listingId,
+      airport_icao: currentAirport.icao || '',
+      requester_name: listing?.contact_name || listing?.business_name || '',
+      requester_email: listing?.email || '',
+      requester_phone: listing?.phone || '',
+      package_name: "featured_airport_listing",
+      price_cents: 1900,
+      status: "new",
+      message: `Requested featured placement at ${currentAirport.icao || 'airport'} for ${listing?.title || listing?.business_name || 'listing'}.`
+    });
+
+  if(error){
+    if(note) note.textContent = `Request could not be saved yet: ${error.message}`;
+    return;
+  }
+
+  if(note) note.textContent = "Featured request saved. Next step: contact the owner, collect payment, then activate their placement.";
+}
+
+function openFeaturePage(){
+  document.getElementById("featurePage")?.classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+function closeFeaturePage(){
+  document.getElementById("featurePage")?.classList.remove("open");
+  if(!document.getElementById("listingPage")?.classList.contains("open")) document.body.style.overflow = "";
+}
+
+let currentSubmitType = "cfi";
+let selectedAircraftModels = [];
+let pendingSubmissionPhotos = [];
+let authMethod = "email";
+let currentUser = null;
+
+function openModal(id){
+  const modal = document.getElementById(id);
+  if(!modal) return;
+  modal.classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+
+function closeModal(id){
+  const modal = document.getElementById(id);
+  if(!modal) return;
+  modal.classList.remove("open");
+  if(!document.querySelector(".mvp-modal.open, .listing-page.open")) document.body.style.overflow = "";
+}
+
+function openSubmitModal(){
+  if(currentAirport && document.getElementById("subAirport")) document.getElementById("subAirport").value = currentAirport.icao || "";
+  setSubmitType(currentSubmitType || "cfi");
+  openModal("submitModal");
+}
+function closeSubmitModal(){ closeModal("submitModal"); }
+function openAuthModal(){ openModal("authModal"); }
+function closeAuthModal(){ closeModal("authModal"); }
+function openProfileModal(){ hydrateProfileForm(); openModal("profileModal"); }
+function closeProfileModal(){ closeModal("profileModal"); }
+function openAdminModal(){ openModal("adminModal"); loadAdminData(); }
+function closeAdminModal(){ closeModal("adminModal"); }
+function openClaimModal(listingId){
+  const id = document.getElementById("claimListingId");
+  if(id) id.value = listingId || "";
+  openModal("claimModal");
+}
+function closeClaimModal(){ closeModal("claimModal"); }
+
+function setSubmitType(type){
+  currentSubmitType = type || "cfi";
+  document.querySelectorAll("[data-submit-type]").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.submitType === currentSubmitType);
+    btn.type = "button";
+  });
+
+  const isCfi = currentSubmitType === "cfi";
+  const isRental = currentSubmitType === "rental_aircraft";
+  const isSchool = currentSubmitType === "flight_school";
+  const isClub = currentSubmitType === "flying_club";
+  const isMx = currentSubmitType === "maintenance";
+
+  const certLabel = document.getElementById("subCertLabel");
+  if(certLabel){
+    certLabel.textContent = isMx ? "Maintenance Certifications" : isSchool ? "School Ratings / Programs" : isClub ? "Club Qualifications" : "Ratings / Certifications";
+  }
+
+  const cfiRate = document.getElementById("cfiRateField");
+  const aircraftRate = document.getElementById("aircraftRateField");
+  const rateType = document.getElementById("rateTypeField");
+  const discovery = document.getElementById("discoveryPriceField");
+  if(cfiRate) cfiRate.style.display = isCfi ? "block" : "none";
+  if(aircraftRate) aircraftRate.style.display = (isRental || isSchool || isClub || isCfi) ? "block" : "none";
+  if(rateType) rateType.style.display = (isRental || isSchool || isClub || isCfi) ? "block" : "none";
+  if(discovery) discovery.style.display = (isCfi || isSchool) ? "block" : "none";
+}
+
+function setAuthMethod(method){
+  authMethod = method === "phone" ? "phone" : "email";
+  document.getElementById("authEmailMethod")?.classList.toggle("active", authMethod === "email");
+  document.getElementById("authPhoneMethod")?.classList.toggle("active", authMethod === "phone");
+  const emailFields = document.getElementById("emailAuthFields");
+  const phoneFields = document.getElementById("phoneAuthFields");
+  if(emailFields) emailFields.style.display = authMethod === "email" ? "block" : "none";
+  if(phoneFields) phoneFields.style.display = authMethod === "phone" ? "block" : "none";
+  const helper = document.getElementById("authHelperText");
+  if(helper) helper.textContent = authMethod === "email" ? "Sign in with email and password, create a new account, or send a magic link." : "Enter a phone number, send an SMS code, then verify it.";
+}
+
+function setStatusText(id, message){
+  const el = document.getElementById(id);
+  if(el) el.textContent = message;
+}
+
+async function signInWithEmail(){
+  const email = document.getElementById("authEmail")?.value.trim();
+  const password = document.getElementById("authPassword")?.value;
+  if(!email || !password) return setStatusText("authStatus", "Enter an email and password first.");
+  setStatusText("authStatus", "Signing in…");
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if(error) return setStatusText("authStatus", error.message);
+  currentUser = data.user;
+  setStatusText("authStatus", "Signed in.");
+  await ensureProfileFromAuth();
+  await refreshAuthState();
+  closeAuthModal();
+}
+
+async function createEmailAccount(){
+  const email = document.getElementById("authEmail")?.value.trim();
+  const password = document.getElementById("authPassword")?.value;
+  const displayName = document.getElementById("authDisplayName")?.value.trim();
+  const handle = document.getElementById("authHandle")?.value.trim();
+  if(!email || !password) return setStatusText("authStatus", "Enter an email and password first.");
+  setStatusText("authStatus", "Creating account…");
+  const { data, error } = await sb.auth.signUp({
+    email,
+    password,
+    options: { data: { display_name: displayName || email.split("@")[0], handle: handle || "" } }
+  });
+  if(error) return setStatusText("authStatus", error.message);
+  currentUser = data.user;
+  setStatusText("authStatus", data.session ? "Account created and signed in." : "Account created. Check your email if confirmation is enabled.");
+  await ensureProfileFromAuth();
+  await refreshAuthState();
+}
+
+async function sendMagicLink(){
+  const email = document.getElementById("authEmail")?.value.trim();
+  if(!email) return setStatusText("authStatus", "Enter your email first.");
+  setStatusText("authStatus", "Sending magic link…");
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+  setStatusText("authStatus", error ? error.message : "Magic link sent. Check your email.");
+}
+
+async function sendPhoneCode(){
+  const phone = document.getElementById("authPhone")?.value.trim();
+  if(!phone) return setStatusText("authStatus", "Enter a phone number first, including country code like +1.");
+  setStatusText("authStatus", "Sending SMS code…");
+  const { error } = await sb.auth.signInWithOtp({ phone });
+  setStatusText("authStatus", error ? error.message : "SMS code sent.");
+}
+
+async function verifyPhoneCode(){
+  const phone = document.getElementById("authPhone")?.value.trim();
+  const token = document.getElementById("authOtpCode")?.value.trim();
+  if(!phone || !token) return setStatusText("authStatus", "Enter your phone number and SMS code.");
+  setStatusText("authStatus", "Verifying code…");
+  const { data, error } = await sb.auth.verifyOtp({ phone, token, type: "sms" });
+  if(error) return setStatusText("authStatus", error.message);
+  currentUser = data.user;
+  setStatusText("authStatus", "Signed in.");
+  await ensureProfileFromAuth();
+  await refreshAuthState();
+  closeAuthModal();
+}
+
+async function refreshAuthState(){
+  const { data } = await sb.auth.getUser();
+  currentUser = data?.user || null;
+  const loginBtn = document.getElementById("loginBtn");
+  const profileBtn = document.getElementById("profileBtn");
+  if(loginBtn) loginBtn.style.display = currentUser ? "none" : "inline-flex";
+  if(profileBtn) profileBtn.style.display = currentUser ? "inline-flex" : "none";
+}
+
+async function ensureProfileFromAuth(){
+  if(!currentUser) return;
+  const meta = currentUser.user_metadata || {};
+  const payload = {
+    id: currentUser.id,
+    email: currentUser.email || null,
+    phone: currentUser.phone || null,
+    display_name: meta.display_name || currentUser.email?.split("@")[0] || "Nearby Flyer User",
+    handle: meta.handle || null,
+    updated_at: new Date().toISOString()
+  };
+  await sb.from("profiles").upsert(payload, { onConflict: "id" });
+}
+
+async function hydrateProfileForm(){
+  await refreshAuthState();
+  if(!currentUser){
+    closeProfileModal();
+    openAuthModal();
+    return;
+  }
+  const { data } = await sb.from("profiles").select("*").eq("id", currentUser.id).maybeSingle();
+  const profile = data || currentUser.user_metadata || {};
+  const set = (id, value) => { const el = document.getElementById(id); if(el) el.value = value || ""; };
+  set("profileDisplayName", profile.display_name || currentUser.email?.split("@")[0]);
+  set("profileHandle", profile.handle || "");
+  set("profileHomeAirport", profile.home_airport || "");
+  set("profilePilotStatus", profile.pilot_status || "future_pilot");
+  set("profileCity", profile.city || "");
+  set("profileState", profile.state || "");
+  set("profilePhone", profile.phone || currentUser.phone || "");
+  set("profileWebsite", profile.website || "");
+  set("profileBio", profile.bio || "");
+  set("profileInterests", Array.isArray(profile.interests) ? profile.interests.join(", ") : (profile.interests || ""));
+  updateProfilePreview();
+}
+
+function updateProfilePreview(){
+  const name = document.getElementById("profileDisplayName")?.value || currentUser?.email?.split("@")[0] || "Nearby Flyer User";
+  const handle = document.getElementById("profileHandle")?.value || "handle";
+  const nameEl = document.getElementById("profileNamePreview");
+  const handleEl = document.getElementById("profileHandlePreview");
+  const avatar = document.getElementById("profileAvatar");
+  if(nameEl) nameEl.textContent = name;
+  if(handleEl) handleEl.textContent = "@" + handle.replace(/^@/, "");
+  if(avatar && !avatar.querySelector("img")) avatar.textContent = getInitials(name);
+}
+
+document.getElementById("profileDisplayName")?.addEventListener("input", updateProfilePreview);
+document.getElementById("profileHandle")?.addEventListener("input", updateProfilePreview);
+document.getElementById("profileAvatarInput")?.addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  if(!file) return;
+  const avatar = document.getElementById("profileAvatar");
+  const url = URL.createObjectURL(file);
+  if(avatar) avatar.innerHTML = `<img src="${url}" alt="Profile photo">`;
+});
+
+async function saveProfile(event){
+  event.preventDefault();
+  await refreshAuthState();
+  if(!currentUser){ openAuthModal(); return; }
+  setStatusText("profileStatus", "Saving profile…");
+  const interests = (document.getElementById("profileInterests")?.value || "").split(",").map(x => x.trim()).filter(Boolean);
+  const payload = {
+    id: currentUser.id,
+    email: currentUser.email || null,
+    display_name: document.getElementById("profileDisplayName")?.value.trim() || null,
+    handle: document.getElementById("profileHandle")?.value.trim().replace(/^@/, "") || null,
+    home_airport: document.getElementById("profileHomeAirport")?.value.trim().toUpperCase() || null,
+    pilot_status: document.getElementById("profilePilotStatus")?.value || null,
+    city: document.getElementById("profileCity")?.value.trim() || null,
+    state: document.getElementById("profileState")?.value.trim() || null,
+    phone: document.getElementById("profilePhone")?.value.trim() || null,
+    website: document.getElementById("profileWebsite")?.value.trim() || null,
+    bio: document.getElementById("profileBio")?.value.trim() || null,
+    interests,
+    updated_at: new Date().toISOString()
+  };
+  const { error } = await sb.from("profiles").upsert(payload, { onConflict: "id" });
+  setStatusText("profileStatus", error ? error.message : "Profile saved.");
+  updateProfilePreview();
+}
+
+async function signOut(){
+  await sb.auth.signOut();
+  currentUser = null;
+  await refreshAuthState();
+  closeProfileModal();
+}
+
+function submitAuth(event){
+  event.preventDefault();
+  if(authMethod === "phone") return sendPhoneCode();
+  return signInWithEmail();
+}
+
+function previewSubmissionPhotos(){
+  const files = Array.from(document.getElementById("subPhotos")?.files || []).slice(0, 8);
+  pendingSubmissionPhotos = files;
+  const preview = document.getElementById("subPhotoPreview");
+  if(!preview) return;
+  preview.innerHTML = files.map(file => `<img src="${URL.createObjectURL(file)}" alt="${escapeHtml(file.name)}">`).join("");
+}
+
+function addSelectedAircraft(model){
+  if(!model) return;
+  if(!selectedAircraftModels.includes(model)) selectedAircraftModels.push(model);
+  renderSelectedAircraft();
+}
+
+function removeSelectedAircraft(model){
+  selectedAircraftModels = selectedAircraftModels.filter(x => x !== model);
+  renderSelectedAircraft();
+}
+
+function renderSelectedAircraft(){
+  const list = document.getElementById("selectedAircraftList");
+  if(!list) return;
+  list.innerHTML = selectedAircraftModels.map(model => `
+    <span class="selected-aircraft-chip">${escapeHtml(model)} <button type="button" onclick="removeSelectedAircraft('${escapeHtml(model)}')">×</button></span>
+  `).join("");
+}
+
+
+function ensureFloatingAircraftDropdown(input, results){
+  if(!input || !results) return;
+  if(results.parentElement !== document.body){
+    document.body.appendChild(results);
+  }
+  results.classList.add("aircraft-floating");
+  positionAircraftDropdown(input, results);
+}
+
+function positionAircraftDropdown(input, results){
+  if(!input || !results) return;
+  const field = input.closest(".home-filter-field, .form-field, .aircraft-search-wrap") || input;
+  const rect = field.getBoundingClientRect();
+  const inputRect = input.getBoundingClientRect();
+  const margin = 8;
+  const left = Math.max(10, Math.min(rect.left, window.innerWidth - rect.width - 10));
+  const top = inputRect.bottom + margin;
+  const width = Math.max(rect.width, inputRect.width, 240);
+  const maxHeight = Math.max(180, window.innerHeight - top - 18);
+
+  results.style.left = `${left}px`;
+  results.style.top = `${top}px`;
+  results.style.width = `${Math.min(width, window.innerWidth - left - 10)}px`;
+  results.style.maxHeight = `${Math.min(420, maxHeight)}px`;
+}
+
+function closeAircraftDropdown(results){
+  if(!results) return;
+  results.classList.remove("open");
+  results.innerHTML = "";
+}
+
+function filterAircraftOptions(){
+  loadAircraftSearchOptions();
+
+  const active = document.activeElement;
+  const isSubmissionSearch = active && active.id === "subAircraftSearch";
+  const input = isSubmissionSearch ? document.getElementById("subAircraftSearch") : document.getElementById("filterAircraft");
+  const results = isSubmissionSearch ? document.getElementById("aircraftSearchResults") : document.getElementById("aircraftResults");
+  if(!input || !results) return;
+
+  ensureFloatingAircraftDropdown(input, results);
+
+  const q = input.value.trim().toLowerCase();
+  const matches = aircraftSearchOptions
+    .filter(x => !q || x.toLowerCase().includes(q))
+    .slice(0,24);
+
+  if(!matches.length){
+    closeAircraftDropdown(results);
+    if(!isSubmissionSearch) applyHomeFilters(false);
+    return;
+  }
+
+  results.innerHTML = matches.map(model => {
+    const safe = escapeHtml(model);
+    const parts = safe.split(" — ");
+    return `<button type="button" class="aircraft-option" onclick="selectAircraftOption('${safe.replace(/'/g, "&#39;")}')"><b>${parts[0]}</b>${parts[1] ? `<span>${parts[1]}</span>` : ""}</button>`;
+  }).join("");
+
+  positionAircraftDropdown(input, results);
+  results.classList.add("open");
+  if(!isSubmissionSearch) applyHomeFilters(false);
+}
+
+function selectAircraftOption(model){
+  model = String(model || "").replace(/&amp;/g, "&").replace(/&#39;/g, "'");
+  const displayModel = model.split(" — ")[0] || model;
+  const active = document.activeElement;
+  const submissionInput = document.getElementById("subAircraftSearch");
+  const homeInput = document.getElementById("filterAircraft");
+  const submissionResults = document.getElementById("aircraftSearchResults");
+  const homeResults = document.getElementById("aircraftResults");
+
+  const usingSubmission = submissionResults?.classList.contains("open") || active?.id === "subAircraftSearch";
+  if(usingSubmission){
+    addSelectedAircraft(model);
+    if(submissionInput) submissionInput.value = "";
+    closeAircraftDropdown(submissionResults);
+  } else {
+    if(homeInput) homeInput.value = displayModel;
+    closeAircraftDropdown(homeResults);
+    applyHomeFilters(true);
+  }
+}
+
+async function submitListing(event){
+  event.preventDefault();
+  const title = document.getElementById("subTitle")?.value.trim();
+  const airport = document.getElementById("subAirport")?.value.trim().toUpperCase();
+  const contactName = document.getElementById("subContact")?.value.trim();
+  const primaryContact = document.getElementById("subPrimaryContact")?.value.trim();
+  const description = document.getElementById("subDescription")?.value.trim();
+  const services = document.getElementById("subServices")?.value.trim();
+  if(!title || !airport || !contactName || !primaryContact || !description || !services){
+    return setStatusText("submitStatus", "Fill in all required fields first.");
+  }
+
+  setStatusText("submitStatus", "Saving pending submission…");
+  await refreshAuthState();
+  const payload = {
+    listing_type: currentSubmitType,
+    title,
+    airport_icao: airport,
+    contact_name: contactName,
+    primary_contact: primaryContact,
+    email: document.getElementById("subEmail")?.value.trim() || null,
+    phone: document.getElementById("subPhone")?.value.trim() || null,
+    business_name: document.getElementById("subBusiness")?.value.trim() || null,
+    website: document.getElementById("subWebsite")?.value.trim() || null,
+    description,
+    services_offered: services,
+    certifications: document.getElementById("subCerts")?.value.trim() || null,
+    requirements: document.getElementById("subRequirements")?.value.trim() || null,
+    availability: document.getElementById("subAvailability")?.value.trim() || null,
+    cfi_rate: document.getElementById("subCfiRate")?.value.trim() || null,
+    aircraft_rate: document.getElementById("subAircraftRate")?.value.trim() || null,
+    aircraft_rate_type: document.getElementById("subAircraftRateType")?.value || null,
+    discovery_price: document.getElementById("subDiscoveryPrice")?.value.trim() || null,
+    aircraft_models: selectedAircraftModels,
+    tail_numbers: document.getElementById("subTail")?.value.trim() || null,
+    aircraft_year: document.getElementById("subAircraftYear")?.value.trim() || null,
+    avionics: document.getElementById("subAircraftAvionics")?.value.trim() || null,
+    status: "pending",
+    submitted_by: currentUser?.id || null,
+    created_at: new Date().toISOString()
+  };
+
+  let result = await sb.from("listing_submissions").insert(payload).select("id").single();
+  if(result.error){
+    // Fallback name used in some earlier schema drafts.
+    result = await sb.from("service_submissions").insert(payload).select("id").single();
+  }
+  if(result.error) return setStatusText("submitStatus", result.error.message);
+
+  setStatusText("submitStatus", "Submitted for review. Admin can approve it next.");
+  document.getElementById("submitListingForm")?.reset();
+  selectedAircraftModels = [];
+  pendingSubmissionPhotos = [];
+  renderSelectedAircraft();
+  const preview = document.getElementById("subPhotoPreview");
+  if(preview) preview.innerHTML = "";
+}
+
+async function submitClaim(event){
+  event.preventDefault();
+  setStatusText("claimStatus", "Saving claim request…");
+  const payload = {
+    listing_id: document.getElementById("claimListingId")?.value || null,
+    name: document.getElementById("claimName")?.value.trim() || null,
+    email: document.getElementById("claimEmail")?.value.trim() || null,
+    phone: document.getElementById("claimPhone")?.value.trim() || null,
+    message: document.getElementById("claimMessage")?.value.trim() || null,
+    status: "pending",
+    created_at: new Date().toISOString()
+  };
+  const { error } = await sb.from("claim_requests").insert(payload);
+  setStatusText("claimStatus", error ? error.message : "Claim request submitted for review.");
+}
+
+function renderAdminCards(rows, emptyText){
+  if(!rows || !rows.length) return `<div class="empty">${escapeHtml(emptyText)}</div>`;
+  return rows.map(row => `
+    <div class="admin-card">
+      <h3>${escapeHtml(row.title || row.name || row.contact_name || "Pending item")}</h3>
+      <p>${escapeHtml(row.description || row.message || row.primary_contact || "No notes.")}</p>
+      <div class="admin-meta">
+        ${Object.entries(row).slice(0,8).map(([k,v]) => `<span class="admin-pill">${escapeHtml(k)}: ${escapeHtml(Array.isArray(v) ? v.join(", ") : (v ?? "—"))}</span>`).join("")}
+      </div>
+    </div>
+  `).join("");
+}
+
+async function loadAdminData(){
+  const subEl = document.getElementById("adminSubmissions");
+  const claimEl = document.getElementById("adminClaims");
+  if(subEl) subEl.innerHTML = `<div class="empty">Loading…</div>`;
+  if(claimEl) claimEl.innerHTML = `<div class="empty">Loading…</div>`;
+
+  let submissions = await sb.from("listing_submissions").select("*").order("created_at", { ascending:false }).limit(25);
+  if(submissions.error) submissions = await sb.from("service_submissions").select("*").order("created_at", { ascending:false }).limit(25);
+  const claims = await sb.from("claim_requests").select("*").order("created_at", { ascending:false }).limit(25);
+
+  if(subEl) subEl.innerHTML = submissions.error ? `<div class="empty">${escapeHtml(submissions.error.message)}</div>` : renderAdminCards(submissions.data, "No pending submissions yet.");
+  if(claimEl) claimEl.innerHTML = claims.error ? `<div class="empty">${escapeHtml(claims.error.message)}</div>` : renderAdminCards(claims.data, "No claim requests yet.");
+}
+
+["authModal","profileModal","submitModal","claimModal","adminModal"].forEach(id => {
+  document.getElementById(id)?.addEventListener("click", (e) => {
+    if(e.target.id === id) closeModal(id);
+  });
+});
+
+
+document.getElementById("listingPage").addEventListener("click", (e) => {
+  if(e.target.id === "listingPage") closeListingPage();
+});
+
+document.addEventListener("click", (e) => {
+  const results = document.getElementById("aircraftSearchResults");
+  const input = document.getElementById("subAircraftSearch");
+  if(!results || !input) return;
+  if(e.target === input || results.contains(e.target)) return;
+  results.classList.remove("open");
+});
+
+window.addEventListener("resize", () => {
+  const homeInput = document.getElementById("filterAircraft");
+  const homeResults = document.getElementById("aircraftResults");
+  if(homeResults?.classList.contains("open")) positionAircraftDropdown(homeInput, homeResults);
+
+  const subInput = document.getElementById("subAircraftSearch");
+  const subResults = document.getElementById("aircraftSearchResults");
+  if(subResults?.classList.contains("open")) positionAircraftDropdown(subInput, subResults);
+});
+
+document.addEventListener("keydown", (e) => {
+  if(e.key === "Escape") closeListingPage();
+});
+
+function searchAirport() {
+  applyHomeFilters(true);
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+initMap();
+refreshAuthState();
+</script>
+</body>
+</html>
