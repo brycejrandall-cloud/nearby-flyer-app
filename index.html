@@ -3269,6 +3269,7 @@ body.admin-user #adminBtn{
           <div class="auth-simple-actions">
             <button class="btn primary" type="button" id="signInBtn" onclick="signInWithEmail()">Log In</button>
             <button class="btn ghost" type="button" onclick="openCreateAccountPage()">Create Account</button>
+            <button class="btn ghost" type="button" onclick="sendPasswordReset()" style="font-size:13px;padding:8px 14px">Forgot password?</button>
           </div>
           <div id="phoneAuthFields" style="display:none">
             <input id="authPhone" placeholder="+14805551234">
@@ -4570,7 +4571,6 @@ function renderMarkers() {
       <div class="airport-bubble ${currentAirport && currentAirport.icao === a.icao ? "selected" : ""}">
         <div class="airport-code">${escapeHtml(a.icao || a.airport_code || "")}</div>
         <div class="airport-name">${escapeHtml(a.airport_name || a.display_airport_name || a.name || a.icao || "Airport")}</div>
-        ${previewNames ? `<div class="airport-preview">${escapeHtml(previewNames)}</div>` : ""}
         <div class="airport-counts">
           <span class="count-pill blue">${displayCounts.cfi || 0} CFIs</span>
           <span class="count-pill orange">${displayCounts.flight_school || 0} Flight Schools</span>
@@ -4721,33 +4721,27 @@ async function loadListingsForAirport(airportId) {
   const airportIcao = String(currentAirport?.icao || "").trim().toUpperCase();
   currentListings = [];
 
-  // The clean backend exposes public people/listing cards through public_listing_details.
-  // Load from the public view first and filter on the client so small differences in
-  // airport_id, icao casing, or status wording do not make the page look empty.
-  try {
-    const data = await loadPublicListingRowsDirect();
-    const rows = (data || [])
-      .map(normalizePublicListing)
-      .filter(Boolean)
-      .filter(listing => isPublicListingStatus(listing.status));
+  if(airportIcao) {
+    try {
+      const { data, error } = await sb
+        .from("public_listing_details")
+        .select("*")
+        .eq("icao", airportIcao)
+        .order("featured", { ascending: false })
+        .order("title", { ascending: true });
 
-    const matchingRows = rows.filter(listing => {
-      const listingIcao = String(listing.icao || listing.airport_ident || "").trim().toUpperCase();
-      const listingAirportId = String(listing.airport_id || "").trim();
-      const selectedAirportId = String(airportId || "").trim();
-      return (airportIcao && listingIcao === airportIcao) || (selectedAirportId && listingAirportId === selectedAirportId);
-    });
+      if(error) throw error;
 
-    currentListings = matchingRows;
+      currentListings = (data || []).map(normalizePublicListing).filter(Boolean);
 
-    if(currentListings.length) {
-      console.log(`Loaded ${currentListings.length} public listings for ${airportIcao || airportId}.`, currentListings);
-      return;
+      if(currentListings.length) {
+        console.log(`Loaded ${currentListings.length} listings for ${airportIcao}.`);
+        return;
+      }
+      console.warn(`No listings found for ${airportIcao}.`);
+    } catch(err) {
+      console.warn("public_listing_details failed, falling back to listing_airports:", err?.message || err);
     }
-
-    console.warn(`No public listings matched ${airportIcao || airportId}. Loaded ${rows.length} public listings total.`, rows);
-  } catch(err) {
-    console.warn("public_listing_details failed, falling back to listing_airports:", err?.message || err);
   }
 
   const { data, error } = await sb
@@ -4865,9 +4859,7 @@ async function renderBoard() {
     const hasMx = (displayCounts.maintenance || 0) > 0;
 
     const airportSummary = currentAirport.airport_summary || `${currentAirport.airport_name || currentAirport.icao} is a local airport. Nearby Flyer shows the services currently posted here so pilots can quickly understand what is available.`;
-    const fboNames = Array.isArray(currentAirport.fbo_names) && currentAirport.fbo_names.length
-      ? currentAirport.fbo_names.join(" · ")
-      : "";
+    const fboNames = currentAirport.fbo_names ? String(currentAirport.fbo_names).trim() : "";
     const fboInfo = fboNames || currentAirport.airport_services_summary || currentAirport.fbo_summary || "FBO and airport service information coming soon.";
     const runwaySummary = currentAirport.runway_summary || "Runway information coming soon";
     const fuelInfo = currentAirport.fuel_available || "Fuel information coming soon";
@@ -5983,6 +5975,15 @@ async function createEmailAccount(){
   setStatusText("signupStatus", "Finish the required account details to create your profile.");
 }
 
+async function sendPasswordReset(){
+  const email = cleanAuthEmail();
+  if(!email) return setStatusText("authStatus", "Enter your email address first.");
+  setStatusText("authStatus", "Sending password reset email…");
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: authRedirectUrl() });
+  if(error) return setStatusText("authStatus", error.message);
+  setStatusText("authStatus", "Check your inbox for a password reset link.");
+}
+
 async function sendEmailCode(){
   return setStatusText("authStatus", "Email-code login is disabled for now. Use email + password, or create an account first.");
 }
@@ -6621,6 +6622,15 @@ sb.auth.onAuthStateChange(async (event, session) => {
   currentUser = session?.user || null;
   if(currentUser) await ensureProfileFromAuth();
   await refreshAuthState();
+  if(event === "PASSWORD_RECOVERY") {
+    const newPass = prompt("Enter your new password (at least 6 characters):");
+    if(newPass && newPass.length >= 6) {
+      const { error } = await sb.auth.updateUser({ password: newPass });
+      if(error) alert("Password update failed: " + error.message);
+      else alert("Password updated! You are now signed in.");
+    }
+    return;
+  }
   if(currentUser && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION")) {
     closeAuthModal();
     await continuePendingAuthAction();
