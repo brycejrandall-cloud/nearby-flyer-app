@@ -3798,6 +3798,29 @@ function attachListingPreviewsToAirports(markerRows, previewIndex){
   });
 }
 
+async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 5000){
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try{
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    if(!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function loadAirportMarkerRowsDirect(){
+  const url = `${SUPABASE_URL}/rest/v1/airport_map_markers?select=*&order=icao.asc`;
+  return await fetchJsonWithTimeout(url, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      Accept: "application/json"
+    }
+  }, 5000);
+}
+
 function countListingsByAirport(listings){
   const byAirport = {};
   (listings || []).map(normalizePublicListing).filter(row => isPublicListingStatus(row.status)).forEach(row => {
@@ -3935,13 +3958,7 @@ async function loadAirports() {
   let error = null;
 
   try {
-    const result = await sb
-      .from("airport_map_markers")
-      .select("*")
-      .order("icao", { ascending: true });
-
-    data = result?.data || [];
-    error = result?.error || null;
+    data = await loadAirportMarkerRowsDirect();
   } catch(err) {
     error = err;
     data = [];
@@ -3951,8 +3968,7 @@ async function loadAirports() {
     console.warn("airport_map_markers failed, using fallback airport bubbles if needed:", error.message || error);
   }
 
-  const previewIndex = await loadMapListingPreviewIndex();
-  const enrichedRows = attachListingPreviewsToAirports(data || [], previewIndex);
+  const enrichedRows = attachListingPreviewsToAirports(data || [], {});
   let rowsWithCoords = enrichedRows.filter(a => getCoords(a));
 
   if(!rowsWithCoords.length){
