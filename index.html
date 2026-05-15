@@ -4721,33 +4721,27 @@ async function loadListingsForAirport(airportId) {
   const airportIcao = String(currentAirport?.icao || "").trim().toUpperCase();
   currentListings = [];
 
-  // The clean backend exposes public people/listing cards through public_listing_details.
-  // Load from the public view first and filter on the client so small differences in
-  // airport_id, icao casing, or status wording do not make the page look empty.
-  try {
-    const data = await loadPublicListingRowsDirect();
-    const rows = (data || [])
-      .map(normalizePublicListing)
-      .filter(Boolean)
-      .filter(listing => isPublicListingStatus(listing.status));
+  if(airportIcao) {
+    try {
+      const { data, error } = await sb
+        .from("public_listing_details")
+        .select("*")
+        .eq("icao", airportIcao)
+        .order("featured", { ascending: false })
+        .order("title", { ascending: true });
 
-    const matchingRows = rows.filter(listing => {
-      const listingIcao = String(listing.icao || listing.airport_ident || "").trim().toUpperCase();
-      const listingAirportId = String(listing.airport_id || "").trim();
-      const selectedAirportId = String(airportId || "").trim();
-      return (airportIcao && listingIcao === airportIcao) || (selectedAirportId && listingAirportId === selectedAirportId);
-    });
+      if(error) throw error;
 
-    currentListings = matchingRows;
+      currentListings = (data || []).map(normalizePublicListing).filter(Boolean);
 
-    if(currentListings.length) {
-      console.log(`Loaded ${currentListings.length} public listings for ${airportIcao || airportId}.`, currentListings);
-      return;
+      if(currentListings.length) {
+        console.log(`Loaded ${currentListings.length} listings for ${airportIcao}.`);
+        return;
+      }
+      console.warn(`No listings found for ${airportIcao}.`);
+    } catch(err) {
+      console.warn("public_listing_details failed, falling back to listing_airports:", err?.message || err);
     }
-
-    console.warn(`No public listings matched ${airportIcao || airportId}. Loaded ${rows.length} public listings total.`, rows);
-  } catch(err) {
-    console.warn("public_listing_details failed, falling back to listing_airports:", err?.message || err);
   }
 
   const { data, error } = await sb
@@ -4865,9 +4859,7 @@ async function renderBoard() {
     const hasMx = (displayCounts.maintenance || 0) > 0;
 
     const airportSummary = currentAirport.airport_summary || `${currentAirport.airport_name || currentAirport.icao} is a local airport. Nearby Flyer shows the services currently posted here so pilots can quickly understand what is available.`;
-    const fboNames = Array.isArray(currentAirport.fbo_names) && currentAirport.fbo_names.length
-      ? currentAirport.fbo_names.join(" · ")
-      : "";
+    const fboNames = currentAirport.fbo_names ? String(currentAirport.fbo_names).trim() : "";
     const fboInfo = fboNames || currentAirport.airport_services_summary || currentAirport.fbo_summary || "FBO and airport service information coming soon.";
     const runwaySummary = currentAirport.runway_summary || "Runway information coming soon";
     const fuelInfo = currentAirport.fuel_available || "Fuel information coming soon";
