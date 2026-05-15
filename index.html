@@ -3980,7 +3980,9 @@ async function loadAirports() {
     setStatus(`Loaded ${airports.length} airport boards. Use the filters to narrow the map.`);
   }
 
-  applyHomeFilters(false);
+  filteredAirports = [...airports].sort((a,b) => getAirportActivityScore(b) - getAirportActivityScore(a));
+  renderMarkers();
+  updateFilterSummary({ q:"", serviceType:"", aircraft:"", airportCity:"" });
   airportLoadFinished = true;
 
   // Release safety: if a filter/data issue still leaves the map blank, never ship an empty map.
