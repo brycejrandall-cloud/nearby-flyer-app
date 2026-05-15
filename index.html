@@ -3680,7 +3680,7 @@ async function loadMapListingPreviewIndex(){
   try{
     const { data, error } = await sb
       .from("public_listing_details")
-      .select("id,icao,airport_ident,category,status,listing_type,title,display_name,business_name,contact_name")
+      .select("id,icao,category,status,listing_type,title,display_name,business_name,contact_name")
       .order("title", { ascending: true });
 
     if(error){
