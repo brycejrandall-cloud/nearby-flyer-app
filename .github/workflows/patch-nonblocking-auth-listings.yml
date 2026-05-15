@@ -1,0 +1,106 @@
+name: Patch nonblocking auth and listings
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make auth/profile sync and listing enrichment nonblocking
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('index.html')
+          text = path.read_text()
+
+          old = '''  currentUser = data?.user || data?.session?.user || null;
+  setStatusText("authStatus", "Signed in.");
+  await ensureProfileFromAuth();
+  await refreshAuthState();
+  closeAuthModal();
+  await continuePendingAuthAction();
+}'''
+          new = '''  currentUser = data?.user || data?.session?.user || null;
+  setStatusText("authStatus", "Signed in.");
+  closeAuthModal();
+  setAuthButtonsDisabled(false);
+  Promise.resolve()
+    .then(() => ensureProfileFromAuth())
+    .catch(err => console.warn("Profile sync after sign-in skipped:", err?.message || err))
+    .finally(() => refreshAuthState().catch(err => console.warn("Auth refresh after sign-in skipped:", err?.message || err)));
+  await continuePendingAuthAction();
+}'''
+          if old not in text:
+              print('signInWithEmail block not found')
+          else:
+              text = text.replace(old, new, 1)
+
+          old = '''  await ensureProfileFromAuth();
+  await refreshAuthState();
+
+  authRequestInProgress = false;
+  setStatusText("signupStatus", "Account confirmed and signed in.");
+  closeCreateAccountModal();
+  await continuePendingAuthAction();
+}'''
+          new = '''  authRequestInProgress = false;
+  setStatusText("signupStatus", "Account confirmed and signed in.");
+  closeCreateAccountModal();
+  Promise.resolve()
+    .then(() => ensureProfileFromAuth())
+    .catch(err => console.warn("Profile sync after signup skipped:", err?.message || err))
+    .finally(() => refreshAuthState().catch(err => console.warn("Auth refresh after signup skipped:", err?.message || err)));
+  await continuePendingAuthAction();
+}'''
+          if old not in text:
+              print('verifyCreateAccountCode profile block not found')
+          else:
+              text = text.replace(old, new, 1)
+
+          old = '''  await preloadListingCardPhotos(filtered);
+  await preloadListingCardDetails(filtered);
+
+  content.innerHTML = boardHelper + filtered.map(l => {'''
+          new = '''  await Promise.race([
+    Promise.allSettled([
+      preloadListingCardPhotos(filtered),
+      preloadListingCardDetails(filtered)
+    ]),
+    new Promise(resolve => setTimeout(resolve, 900))
+  ]);
+
+  content.innerHTML = boardHelper + filtered.map(l => {'''
+          if old not in text:
+              print('renderBoard preload block not found')
+          else:
+              text = text.replace(old, new, 1)
+
+          # Make detail/photo loaders fail soft without blocking card rendering in future calls.
+          old = '''    if(error) return;'''
+          new = '''    if(error){
+      console.warn(`Detail preload skipped for ${table}:`, error.message || error);
+      ids.forEach(id => {
+        if(!(id in listingDetailCache)) listingDetailCache[id] = null;
+      });
+      return;
+    }'''
+          if old in text:
+              text = text.replace(old, new, 1)
+
+          path.write_text(text)
+          PY
+      - name: Remove one-time workflow and commit patch
+        run: |
+          rm -f .github/workflows/patch-nonblocking-auth-listings.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html .github/workflows/patch-nonblocking-auth-listings.yml
+          git diff --cached --quiet && echo "No changes to commit" || git commit -m "Make auth and listing enrichment nonblocking"
+          git push
