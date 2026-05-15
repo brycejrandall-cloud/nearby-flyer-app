@@ -6433,6 +6433,7 @@ async function submitClaim(event){
   setStatusText("claimStatus", "Saving claim request…");
   const payload = {
     listing_id: document.getElementById("claimListingId")?.value || null,
+    user_id: currentUser.id,
     requester_name: document.getElementById("claimName")?.value.trim() || null,
     requested_email: document.getElementById("claimEmail")?.value.trim() || null,
     requested_phone: document.getElementById("claimPhone")?.value.trim() || null,
@@ -6514,15 +6515,55 @@ function renderClaimRequests(rows, emptyText){
         <span class="admin-pill">Email: ${escapeHtml(row.requested_email || "—")}</span>
         <span class="admin-pill">Phone: ${escapeHtml(row.requested_phone || "—")}</span>
         <span class="admin-pill">Listing: ${escapeHtml(row.listing_id || "—")}</span>
+        <span class="admin-pill">Account: ${escapeHtml(row.user_id || "—")}</span>
         ${adminStatusBadge(row.status)}
       </div>
       <div class="admin-actions">
         ${row.requested_email ? `<a class="primary" href="mailto:${escapeHtml(row.requested_email)}">Email</a>` : ""}
         ${row.requested_phone ? `<a href="sms:${escapeHtml(String(row.requested_phone).replace(/[^0-9+]/g,""))}">Text</a>` : ""}
-        ${row.status === "pending" ? `<button class="success" onclick="updateClaimRequestStatus('${escapeHtml(row.id)}','approved')">Approve</button><button class="danger" onclick="updateClaimRequestStatus('${escapeHtml(row.id)}','rejected')">Reject</button>` : ""}
+        ${row.status === "pending" ? `<button class="success" onclick="approveClaimRequest('${escapeHtml(row.id)}')">Approve + Link</button><button class="danger" onclick="updateClaimRequestStatus('${escapeHtml(row.id)}','rejected')">Reject</button>` : ""}
       </div>
     </div>
   `).join("");
+}
+
+async function approveClaimRequest(id){
+  if(!isAdminUser()){
+    alert("Admin access required.");
+    return;
+  }
+
+  const { data: claim, error: claimError } = await sb
+    .from("listing_claim_requests")
+    .select("id, listing_id, user_id, requested_email, requested_phone")
+    .eq("id", id)
+    .maybeSingle();
+
+  if(claimError) {
+    alert(claimError.message);
+    return;
+  }
+  if(!claim?.listing_id || !claim?.user_id){
+    alert("This claim is missing a listing or signed-in account. Ask them to submit the claim again while logged in.");
+    return;
+  }
+
+  const { error: listingError } = await sb
+    .from("listings")
+    .update({ owner_id: claim.user_id, is_claimed: true, updated_at: new Date().toISOString() })
+    .eq("id", claim.listing_id);
+
+  if(listingError) {
+    alert(listingError.message);
+    return;
+  }
+
+  await sb
+    .from("listing_contacts")
+    .update({ claim_status: "claimed", can_claim: false })
+    .eq("listing_id", claim.listing_id);
+
+  await updateClaimRequestStatus(id, "approved");
 }
 
 async function updateClaimRequestStatus(id, status){
