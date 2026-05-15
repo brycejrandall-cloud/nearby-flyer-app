@@ -3269,6 +3269,7 @@ body.admin-user #adminBtn{
           <div class="auth-simple-actions">
             <button class="btn primary" type="button" id="signInBtn" onclick="signInWithEmail()">Log In</button>
             <button class="btn ghost" type="button" onclick="openCreateAccountPage()">Create Account</button>
+            <button class="btn ghost" type="button" onclick="sendPasswordReset()" style="font-size:13px;padding:8px 14px">Forgot password?</button>
           </div>
           <div id="phoneAuthFields" style="display:none">
             <input id="authPhone" placeholder="+14805551234">
@@ -4570,7 +4571,6 @@ function renderMarkers() {
       <div class="airport-bubble ${currentAirport && currentAirport.icao === a.icao ? "selected" : ""}">
         <div class="airport-code">${escapeHtml(a.icao || a.airport_code || "")}</div>
         <div class="airport-name">${escapeHtml(a.airport_name || a.display_airport_name || a.name || a.icao || "Airport")}</div>
-        ${previewNames ? `<div class="airport-preview">${escapeHtml(previewNames)}</div>` : ""}
         <div class="airport-counts">
           <span class="count-pill blue">${displayCounts.cfi || 0} CFIs</span>
           <span class="count-pill orange">${displayCounts.flight_school || 0} Flight Schools</span>
@@ -5975,6 +5975,15 @@ async function createEmailAccount(){
   setStatusText("signupStatus", "Finish the required account details to create your profile.");
 }
 
+async function sendPasswordReset(){
+  const email = cleanAuthEmail();
+  if(!email) return setStatusText("authStatus", "Enter your email address first.");
+  setStatusText("authStatus", "Sending password reset email…");
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: authRedirectUrl() });
+  if(error) return setStatusText("authStatus", error.message);
+  setStatusText("authStatus", "Check your inbox for a password reset link.");
+}
+
 async function sendEmailCode(){
   return setStatusText("authStatus", "Email-code login is disabled for now. Use email + password, or create an account first.");
 }
@@ -6613,6 +6622,15 @@ sb.auth.onAuthStateChange(async (event, session) => {
   currentUser = session?.user || null;
   if(currentUser) await ensureProfileFromAuth();
   await refreshAuthState();
+  if(event === "PASSWORD_RECOVERY") {
+    const newPass = prompt("Enter your new password (at least 6 characters):");
+    if(newPass && newPass.length >= 6) {
+      const { error } = await sb.auth.updateUser({ password: newPass });
+      if(error) alert("Password update failed: " + error.message);
+      else alert("Password updated! You are now signed in.");
+    }
+    return;
+  }
   if(currentUser && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION")) {
     closeAuthModal();
     await continuePendingAuthAction();
