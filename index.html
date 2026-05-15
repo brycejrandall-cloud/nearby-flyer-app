@@ -3286,11 +3286,11 @@ body.admin-user #adminBtn{
       <div class="mvp-head">
         <button class="mvp-close" onclick="closeCreateAccountModal()">×</button>
         <h2>Create your account.</h2>
-        <p>Accounts are required for posting. Nearby Flyer sends a 6-digit email code to confirm your account.</p>
+        <p>Accounts are required for posting. Fill in the form below to create your account instantly.</p>
       </div>
       <div class="mvp-body auth-page-body">
         <form onsubmit="createAccountFromPage(event)">
-          <div class="form-note">Name and email are required. After you create the account, check your email for a 6-digit confirmation code and enter it below.</div>
+          <div class="form-note">Name and email are required.</div>
           <div class="form-grid">
             <div class="form-field"><label>Full Name <span class="required-star">*</span></label><input id="signupName" autocomplete="name" placeholder="Your name" required></div>
             <div class="form-field"><label>Email <span class="required-star">*</span></label><input id="signupEmail" type="email" autocomplete="email" placeholder="you@example.com" required></div>
@@ -3300,7 +3300,7 @@ body.admin-user #adminBtn{
             <div class="form-field"><label>Preferred Contact</label><select id="signupPreferredContact"><option value="email">Email</option><option value="phone">Phone / text</option></select></div>
           </div>
           <div class="auth-simple-actions">
-            <button class="btn primary" type="submit" id="createAccountSendCodeBtn">Send account code</button>
+            <button class="btn primary" type="submit" id="createAccountSendCodeBtn">Create account</button>
             <button class="btn ghost" type="button" onclick="openLoginPage()">Already have an account? Log in</button>
           </div>
           <div class="phone-code-section" id="signupConfirmSection" style="display:none">
@@ -5885,16 +5885,11 @@ async function createAccountFromPage(event){
   if(!password || password.length < 6) return setStatusText("signupStatus", "Create a password with at least 6 characters.");
   if(authRequestInProgress) return;
 
-  const now = Date.now();
-  if(now - lastSignupSentAt < 65000){
-    return setStatusText("signupStatus", "An account code was just requested. Wait about 1 minute before trying again.");
-  }
-
   const nameParts = fullName.split(/\s+/).filter(Boolean);
   const firstName = nameParts[0] || "";
   const lastName = nameParts.slice(1).join(" ");
 
-  window.pendingSignupProfile = {
+  const profile = {
     full_name: fullName,
     name: fullName,
     display_name: fullName,
@@ -5905,33 +5900,42 @@ async function createAccountFromPage(event){
     preferred_contact: preferredContact,
     home_airport: homeAirport || undefined
   };
-  window.pendingSignupPassword = password;
-  window.pendingSignupEmail = email;
 
   authRequestInProgress = true;
-  setStatusText("signupStatus", "Sending account code…");
+  setStatusText("signupStatus", "Creating account…");
 
-  // Use real password signup so Supabase sends the Confirm signup email.
-  // The Confirm signup template should show {{ .Token }} so the user can enter the 6-digit code here.
-  const { error } = await sb.auth.signUp({
-    email,
-    password,
-    options: {
-      data: window.pendingSignupProfile,
-      emailRedirectTo: authRedirectUrl()
+  try {
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/create-account`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
+      },
+      body: JSON.stringify({ email, password, profile })
+    });
+    const result = await resp.json();
+    if(!resp.ok && result.error){
+      authRequestInProgress = false;
+      return setStatusText("signupStatus", result.error || "Could not create account.");
     }
-  });
 
-  authRequestInProgress = false;
-  if(error) return setStatusText("signupStatus", error.message || "Could not send account code.");
+    setStatusText("signupStatus", "Account created. Signing in…");
+    const { data, error: signInError } = await sb.auth.signInWithPassword({ email, password });
+    authRequestInProgress = false;
+    if(signInError){
+      return setStatusText("signupStatus", signInError.message || "Account created. Please log in.");
+    }
 
-  lastSignupSentAt = Date.now();
-  const confirmSection = document.getElementById("signupConfirmSection");
-  const confirmEmail = document.getElementById("signupConfirmEmail");
-  if(confirmEmail) confirmEmail.value = email;
-  if(confirmSection) confirmSection.style.display = "block";
-
-  setStatusText("signupStatus", "Account code sent. Check your email for the 6-digit confirmation code, then enter it below.");
+    currentUser = data?.user || data?.session?.user || null;
+    await ensureProfileFromAuth();
+    await refreshAuthState();
+    closeCreateAccountModal();
+    await continuePendingAuthAction();
+  } catch(err) {
+    authRequestInProgress = false;
+    setStatusText("signupStatus", err?.message || "Account creation failed. Please try again.");
+  }
 }
 
 async function verifyCreateAccountCode(){
