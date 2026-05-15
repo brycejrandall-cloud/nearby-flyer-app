@@ -3969,9 +3969,6 @@ async function loadAirports() {
   }
 
   airports = rowsWithCoords.length ? rowsWithCoords : getFallbackAirports();
-
-  await loadAirportAircraftIndex();
-  await loadAircraftSearchOptions();
   filteredAirports = [...airports];
 
   if(error && rowsWithCoords.length) {
@@ -3985,6 +3982,7 @@ async function loadAirports() {
   }
 
   applyHomeFilters(false);
+  airportLoadFinished = true;
 
   // Release safety: if a filter/data issue still leaves the map blank, never ship an empty map.
   setTimeout(() => {
@@ -3999,7 +3997,12 @@ async function loadAirports() {
     renderNoAirportSelected();
   }
 
-  airportLoadFinished = true;
+  Promise.allSettled([
+    loadAirportAircraftIndex(),
+    loadAircraftSearchOptions()
+  ]).then(() => {
+    if(map && airports.length) applyHomeFilters(false);
+  });
 }
 
 function getCoords(a) {
