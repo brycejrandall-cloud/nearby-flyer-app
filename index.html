@@ -3528,6 +3528,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_9n31Q6FBbpIB_nyJhBz_pw_OhT-sO-o";
 const APP_URL = window.location.protocol === "file:"
   ? "https://nearbyflyer.com/"
   : `${window.location.origin}${window.location.pathname.replace(/\/[^\/]*$/, "/")}`;
+const AWS_API_BASE_URL = String(window.NEARBY_FLYER_API_BASE || "").replace(/\/$/, "");
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
@@ -3810,7 +3811,20 @@ async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 5000){
   }
 }
 
+async function fetchAwsApi(path, options = {}, timeoutMs = 6500){
+  if(!AWS_API_BASE_URL) return null;
+  const headers = {
+    Accept: "application/json",
+    ...(options.headers || {})
+  };
+  return await fetchJsonWithTimeout(`${AWS_API_BASE_URL}${path}`, { ...options, headers }, timeoutMs);
+}
+
 async function loadAirportMarkerRowsDirect(){
+  if(AWS_API_BASE_URL){
+    return await fetchAwsApi("/airports");
+  }
+
   const url = `${SUPABASE_URL}/rest/v1/airport_map_markers?select=*&order=icao.asc`;
   return await fetchJsonWithTimeout(url, {
     headers: {
@@ -3822,6 +3836,10 @@ async function loadAirportMarkerRowsDirect(){
 }
 
 async function loadPublicListingRowsDirect(){
+  if(AWS_API_BASE_URL){
+    return await fetchAwsApi("/listings");
+  }
+
   const url = `${SUPABASE_URL}/rest/v1/public_listing_details?select=*&order=title.asc`;
   return await fetchJsonWithTimeout(url, {
     headers: {
@@ -3835,6 +3853,11 @@ async function loadPublicListingRowsDirect(){
 async function loadAirportProfileDirect(icao){
   const safeIcao = encodeURIComponent(String(icao || "").trim().toUpperCase());
   if(!safeIcao) return null;
+
+  if(AWS_API_BASE_URL){
+    return await fetchAwsApi(`/airports/${safeIcao}`);
+  }
+
   const url = `${SUPABASE_URL}/rest/v1/airports?select=airport_summary,runway_summary,fuel_available,fbo_summary,airport_services_summary,fbo_names,official_airport_url,airport_overview_source_url,managing_authority,address,public_phone,website,notes&icao=eq.${safeIcao}&limit=1`;
   const rows = await fetchJsonWithTimeout(url, {
     headers: {
@@ -4085,6 +4108,62 @@ async function loadAirportAircraftIndex(){
   airportAircraftListingMeta = {};
   listingAircraftDetails = {};
 
+  if(AWS_API_BASE_URL){
+    try{
+      const [aircraftRows, listingRows] = await Promise.all([
+        fetchAwsApi("/listing-aircraft"),
+        fetchAwsApi("/listings")
+      ]);
+      const listingsById = {};
+      (listingRows || []).map(normalizePublicListing).forEach(listing => {
+        if(listing?.id) listingsById[listing.id] = listing;
+      });
+
+      (aircraftRows || []).forEach(row => {
+        const listing = listingsById[row.listing_id] || {};
+        const textBlob = [
+          row.aircraft_identifier,
+          row.tail_number,
+          row.aircraft_year,
+          row.manufacturer,
+          row.model,
+          row.identifier,
+          row.common_name,
+          listing.title,
+          listing.description
+        ].filter(Boolean).join(" ");
+
+        addAircraftIndexText(listingAircraftIndex, row.listing_id, textBlob);
+
+        if(!listingAircraftDetails[row.listing_id]) listingAircraftDetails[row.listing_id] = [];
+        listingAircraftDetails[row.listing_id].push({
+          aircraftIdentifier: row.aircraft_identifier || '',
+          tailNumber: row.tail_number || '',
+          hourlyRateText: row.hourly_rate_text || '',
+          rateType: row.rate_type || '',
+          aircraftYear: row.aircraft_year || '',
+          manufacturer: row.manufacturer || '',
+          model: row.model || '',
+          modelIdentifier: row.identifier || row.aircraft_identifier || '',
+          commonName: row.common_name || ''
+        });
+
+        if(listing.icao){
+          addAircraftIndexText(airportAircraftIndex, listing.icao, textBlob);
+          if(!airportAircraftListingMeta[listing.icao]) airportAircraftListingMeta[listing.icao] = [];
+          airportAircraftListingMeta[listing.icao].push({
+            listingId: row.listing_id,
+            listingType: listing.listing_type || '',
+            text: textBlob
+          });
+        }
+      });
+    } catch(err){
+      console.warn("AWS aircraft filter data could not load:", err?.message || err);
+    }
+    return;
+  }
+
   const { data, error } = await sb
     .from("listing_aircraft")
     .select(`
@@ -4207,6 +4286,17 @@ function getCurrentAirportDisplayCounts(){
   return counts;
 }
 
+function setActiveTab(tab){
+  currentTab = tab;
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
+}
+
+function chooseInitialAirportTab(){
+  const aircraftFilter = (document.getElementById("filterAircraft")?.value || "").trim().toLowerCase();
+  const preferredTabs = ["cfi", "flight_school", "rental_aircraft", "flying_club", "maintenance"];
+  return preferredTabs.find(tab => currentListings.some(listing => normalizeListingType(listing) === tab && listingMatchesAircraft(listing, aircraftFilter))) || "overview";
+}
+
 function airportMatchesAircraft(a, aircraftQuery){
   if(!aircraftQuery) return true;
   const aircraftRows = airportAircraftIndex[a.icao] || [];
@@ -4251,6 +4341,20 @@ async function loadAircraftSearchOptions(){
   aircraftSearchOptionsLoaded = true;
 
   try{
+    if(AWS_API_BASE_URL){
+      const data = await fetchAwsApi("/aircraft-models");
+      if(!data?.length) return;
+      aircraftSearchOptions = data.map(row => {
+        const label = row.common_name || `${row.manufacturer || ""} ${row.model || ""}`.trim() || row.identifier;
+        const details = [row.identifier, row.manufacturer, row.model]
+          .filter(Boolean)
+          .filter((value, index, arr) => arr.indexOf(value) === index)
+          .join(" · ");
+        return details ? `${label} — ${details}` : label;
+      }).filter(Boolean);
+      return;
+    }
+
     const { data, error } = await sb
       .from("aircraft_models")
       .select("manufacturer, model, identifier, common_name")
@@ -4570,8 +4674,6 @@ async function selectAirport(icao, scroll) {
 
   currentAirport = a;
   await enrichCurrentAirportProfile();
-  currentTab = "overview";
-  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === "overview"));
 
   renderMarkers();
 
@@ -4580,6 +4682,7 @@ async function selectAirport(icao, scroll) {
 
   await loadListingsForAirport(a.airport_id);
   await loadFeaturedPlacementsForAirport(a.airport_id);
+  setActiveTab(chooseInitialAirportTab());
   renderAirportHeader();
   renderBoard();
 
@@ -4733,8 +4836,7 @@ function renderFeaturedAirportStrip(){
 }
 
 function selectTab(tab) {
-  currentTab = tab;
-  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
+  setActiveTab(tab);
   renderBoard();
 }
 

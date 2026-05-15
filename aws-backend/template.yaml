@@ -1,0 +1,160 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Nearby Flyer API backend
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Timeout: 12
+    MemorySize: 256
+    Architectures:
+      - arm64
+    Environment:
+      Variables:
+        AIRPORTS_TABLE: !Ref AirportsTable
+        LISTINGS_TABLE: !Ref ListingsTable
+        LISTING_AIRCRAFT_TABLE: !Ref ListingAircraftTable
+        AIRCRAFT_MODELS_TABLE: !Ref AircraftModelsTable
+        REQUESTS_TABLE: !Ref RequestsTable
+        ALLOWED_ORIGIN: https://nearbyflyer.com
+
+Resources:
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins:
+          - https://nearbyflyer.com
+          - https://www.nearbyflyer.com
+          - http://localhost:3000
+          - http://localhost:5173
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - content-type
+          - authorization
+          - x-requested-with
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: lambda/index.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AirportsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ListingsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ListingAircraftTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AircraftModelsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RequestsTable
+      Events:
+        ApiProxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /{proxy+}
+            Method: ANY
+
+  AirportsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: icao
+          AttributeType: S
+      KeySchema:
+        - AttributeName: icao
+          KeyType: HASH
+
+  ListingsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: icao
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: byIcao
+          KeySchema:
+            - AttributeName: icao
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  ListingAircraftTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: listing_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: byListingId
+          KeySchema:
+            - AttributeName: listing_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  AircraftModelsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+
+  RequestsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: request_type
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: byRequestType
+          KeySchema:
+            - AttributeName: request_type
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+Outputs:
+  ApiUrl:
+    Description: Public API URL for the website
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  AirportsTableName:
+    Value: !Ref AirportsTable
+  ListingsTableName:
+    Value: !Ref ListingsTable
+  ListingAircraftTableName:
+    Value: !Ref ListingAircraftTable
+  AircraftModelsTableName:
+    Value: !Ref AircraftModelsTable
+  RequestsTableName:
+    Value: !Ref RequestsTable
+
