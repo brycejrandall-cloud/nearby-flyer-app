@@ -3821,6 +3821,31 @@ async function loadAirportMarkerRowsDirect(){
   }, 5000);
 }
 
+async function loadPublicListingRowsDirect(){
+  const url = `${SUPABASE_URL}/rest/v1/public_listing_details?select=*&order=title.asc`;
+  return await fetchJsonWithTimeout(url, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      Accept: "application/json"
+    }
+  }, 5000);
+}
+
+async function loadAirportProfileDirect(icao){
+  const safeIcao = encodeURIComponent(String(icao || "").trim().toUpperCase());
+  if(!safeIcao) return null;
+  const url = `${SUPABASE_URL}/rest/v1/airports?select=airport_summary,runway_summary,fuel_available,fbo_summary,airport_services_summary,fbo_names,official_airport_url,airport_overview_source_url,managing_authority,address,public_phone,website,notes&icao=eq.${safeIcao}&limit=1`;
+  const rows = await fetchJsonWithTimeout(url, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      Accept: "application/json"
+    }
+  }, 5000);
+  return rows?.[0] || null;
+}
+
 function countListingsByAirport(listings){
   const byAirport = {};
   (listings || []).map(normalizePublicListing).filter(row => isPublicListingStatus(row.status)).forEach(row => {
@@ -4473,14 +4498,12 @@ function renderMarkers() {
 
 async function enrichCurrentAirportProfile(){
   if(!currentAirport || currentAirport.airport_summary) return;
-  const { data, error } = await sb
-    .from("airports")
-    .select("airport_summary, runway_summary, fuel_available, fbo_summary, airport_services_summary, fbo_names, official_airport_url, airport_overview_source_url, managing_authority, address, public_phone, website, notes")
-    .eq("icao", currentAirport.icao)
-    .maybeSingle();
-
-  if(!error && data){
+  try{
+    const data = await loadAirportProfileDirect(currentAirport.icao);
+    if(!data) return;
     currentAirport = { ...currentAirport, ...data };
+  } catch(err){
+    console.warn("Airport profile could not load:", err?.message || err);
   }
 }
 
@@ -4599,14 +4622,7 @@ async function loadListingsForAirport(airportId) {
   // Load from the public view first and filter on the client so small differences in
   // airport_id, icao casing, or status wording do not make the page look empty.
   try {
-    const { data, error } = await sb
-      .from("public_listing_details")
-      .select("*")
-      .order("featured", { ascending: false })
-      .order("title", { ascending: true });
-
-    if(error) throw error;
-
+    const data = await loadPublicListingRowsDirect();
     const rows = (data || [])
       .map(normalizePublicListing)
       .filter(Boolean)
