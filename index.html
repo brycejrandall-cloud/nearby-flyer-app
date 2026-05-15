@@ -438,6 +438,17 @@ h1{
   margin-bottom:18px;
   background:linear-gradient(180deg,#fff,#f8fafc);
   box-shadow:0 14px 36px rgba(15,23,42,.06);
+  position:relative;
+  z-index:0;
+  cursor:pointer;
+}
+.listing:focus-visible{
+  outline:4px solid rgba(37,99,235,.28);
+  outline-offset:4px;
+}
+.listing button,
+.listing a{
+  cursor:pointer;
 }
 .listing-visual{
   position:relative;
@@ -2737,6 +2748,34 @@ h1{
 @media(max-width:1020px){#map{height:520px !important;min-height:520px !important;}}
 @media(max-width:720px){#map{height:560px !important;min-height:560px !important;}}
 
+/* ===== Desktop listing click-layer fix =====
+   Keep the hero/map layers below the airport board and keep the detail panel
+   above every floating dropdown/overlay. */
+.hero{
+  position:relative;
+  z-index:1;
+}
+.airport-board{
+  position:relative;
+  z-index:20;
+  isolation:isolate;
+}
+.board-content,
+.listing{
+  pointer-events:auto;
+}
+.listing-page{
+  z-index:1000000;
+}
+@media (min-width:1021px){
+  .airport-board{
+    margin-top:22px !important;
+  }
+  .listing{
+    transform:translateZ(0);
+  }
+}
+
 
 
 /* ===== Claimable profiles + admin dashboard MVP ===== */
@@ -4927,7 +4966,7 @@ async function renderBoard() {
     const highlights = getListingHighlights(l, detail, aircraftRateCards);
 
     return `
-    <article class="listing">
+    <article class="listing" data-listing-id="${escapeHtml(l.id)}" tabindex="0" onclick="handleListingCardClick(event)" onkeydown="handleListingCardKeydown(event)">
       <div class="listing-visual">
         ${photo ? `<img src="${escapeHtml(photo)}" alt="${title}">` : `<div class="visual-fallback ${escapeHtml(l.listing_type)}">${getListingVisualMark(l.listing_type)}</div>`}
         <div class="listing-visual-badges">
@@ -4973,13 +5012,13 @@ async function renderBoard() {
         </div>
         ${!isListingFeaturedAtCurrentAirport(l) ? `<div class="upgrade-featured-card">
           <div><strong>Want this listing above the rest?</strong><span>Featured listings start at $19/mo per airport and appear higher on airport boards.</span></div>
-          <button class="btn primary" onclick="openFeaturedUpgradeModal('${l.id}')">Upgrade</button>
+          <button class="btn primary" type="button" onclick="openFeaturedUpgradeModal('${l.id}')">Upgrade</button>
         </div>` : ''}
         <div class="actions">
-          <button class="primary" onclick="openListingDetail('${l.id}')">View Profile</button>
-          ${l.phone ? `<button>☎ ${escapeHtml(l.phone)}</button>` : ""}
-          ${l.email ? `<button>✉ Email</button>` : ""}
-          ${l.website ? `<button>Website</button>` : ""}
+          <button class="primary" type="button" onclick="openListingDetail('${l.id}')">View Profile</button>
+          ${l.phone ? `<button type="button">☎ ${escapeHtml(l.phone)}</button>` : ""}
+          ${l.email ? `<button type="button">✉ Email</button>` : ""}
+          ${l.website ? `<button type="button">Website</button>` : ""}
         </div>
       </div>
     </article>
@@ -5308,10 +5347,35 @@ function showUserLocation(){
 
 
 
+function isListingCardControl(target){
+  return Boolean(target?.closest?.("button, a, input, select, textarea, label, [data-ignore-listing-click]"));
+}
+
+function getClickedListingId(event){
+  return event.currentTarget?.dataset?.listingId || event.target?.closest?.(".listing")?.dataset?.listingId || "";
+}
+
+function handleListingCardClick(event){
+  if(isListingCardControl(event.target)) return;
+  const listingId = getClickedListingId(event);
+  if(!listingId) return;
+  openListingDetail(listingId);
+}
+
+function handleListingCardKeydown(event){
+  if(event.key !== "Enter" && event.key !== " ") return;
+  if(isListingCardControl(event.target)) return;
+  const listingId = getClickedListingId(event);
+  if(!listingId) return;
+  event.preventDefault();
+  openListingDetail(listingId);
+}
+
 async function openListingDetail(listingId){
   const listing = currentListings.find(l => l.id === listingId);
   if(!listing) return;
 
+  document.querySelectorAll(".aircraft-search-results.open").forEach(el => el.classList.remove("open"));
   document.getElementById("listingPage").classList.add("open");
   document.body.style.overflow = "hidden";
 
