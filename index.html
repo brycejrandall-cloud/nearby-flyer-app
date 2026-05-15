@@ -3308,7 +3308,6 @@ body.admin-user #adminBtn{
           <div class="auth-simple-actions">
             <button class="btn primary" type="button" id="signInBtn" onclick="signInWithEmail()">Log In</button>
             <button class="btn ghost" type="button" onclick="openCreateAccountPage()">Create Account</button>
-            <button class="btn ghost" type="button" onclick="sendPasswordReset()" style="font-size:13px;padding:8px 14px">Forgot password?</button>
           </div>
           <div id="phoneAuthFields" style="display:none">
             <input id="authPhone" placeholder="+14805551234">
@@ -3325,11 +3324,11 @@ body.admin-user #adminBtn{
       <div class="mvp-head">
         <button class="mvp-close" onclick="closeCreateAccountModal()">×</button>
         <h2>Create your account.</h2>
-        <p>Accounts are required for posting. Fill in the form below to create your account instantly.</p>
+        <p>Accounts are required for posting so every listing has a real owner and contact info.</p>
       </div>
       <div class="mvp-body auth-page-body">
         <form onsubmit="createAccountFromPage(event)">
-          <div class="form-note">Name and email are required.</div>
+          <div class="form-note">Name and email are required. This info is saved to your profile and can prefill future listings, claims, and contact cards.</div>
           <div class="form-grid">
             <div class="form-field"><label>Full Name <span class="required-star">*</span></label><input id="signupName" autocomplete="name" placeholder="Your name" required></div>
             <div class="form-field"><label>Email <span class="required-star">*</span></label><input id="signupEmail" type="email" autocomplete="email" placeholder="you@example.com" required></div>
@@ -3343,7 +3342,7 @@ body.admin-user #adminBtn{
             <button class="btn ghost" type="button" onclick="openLoginPage()">Already have an account? Log in</button>
           </div>
           <div class="phone-code-section" id="signupConfirmSection" style="display:none">
-            <div class="form-note">Enter the 6-digit confirmation code from your email. Use the newest code if you requested more than one.</div>
+            <div class="form-note">Enter the 6-digit confirmation code from your email. Do not click the email link while testing locally.</div>
             <div class="form-grid">
               <div class="form-field"><label>Confirmation Code</label><input id="signupEmailCode" placeholder="123456" inputmode="numeric" autocomplete="one-time-code"></div>
               <div class="form-field"><label>Email</label><input id="signupConfirmEmail" type="email" placeholder="you@example.com" readonly></div>
@@ -3563,8 +3562,8 @@ body.admin-user #adminBtn{
 */
 const MAPBOX_TOKEN = "pk.eyJ1IjoiYnJ5Y2VndWluIiwiYSI6ImNtcDRwcnNlNDE0bWsycm9vYzliNzNlNm0ifQ.OPLOPrRfezV09cCOBCXKaw";
 
-const SUPABASE_URL = "https://cvdwtqbicmriiidifdjz.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN2ZHd0cWJpY21yaWlpZGlmZGp6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4MTk3NzMsImV4cCI6MjA5NDM5NTc3M30.2xfuYu4F6UC2M6vshoNMubw6O0NRbgMAhSEXUf9J_wk";
+const SUPABASE_URL = "https://sohwejfsccmfsbectjif.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_9n31Q6FBbpIB_nyJhBz_pw_OhT-sO-o";
 const APP_URL = window.location.protocol === "file:"
   ? "https://nearbyflyer.com/"
   : `${window.location.origin}${window.location.pathname.replace(/\/[^\/]*$/, "/")}`;
@@ -4610,6 +4609,7 @@ function renderMarkers() {
       <div class="airport-bubble ${currentAirport && currentAirport.icao === a.icao ? "selected" : ""}">
         <div class="airport-code">${escapeHtml(a.icao || a.airport_code || "")}</div>
         <div class="airport-name">${escapeHtml(a.airport_name || a.display_airport_name || a.name || a.icao || "Airport")}</div>
+        ${previewNames ? `<div class="airport-preview">${escapeHtml(previewNames)}</div>` : ""}
         <div class="airport-counts">
           <span class="count-pill blue">${displayCounts.cfi || 0} CFIs</span>
           <span class="count-pill orange">${displayCounts.flight_school || 0} Flight Schools</span>
@@ -4760,27 +4760,33 @@ async function loadListingsForAirport(airportId) {
   const airportIcao = String(currentAirport?.icao || "").trim().toUpperCase();
   currentListings = [];
 
-  if(airportIcao) {
-    try {
-      const { data, error } = await sb
-        .from("public_listing_details")
-        .select("*")
-        .eq("icao", airportIcao)
-        .order("featured", { ascending: false })
-        .order("title", { ascending: true });
+  // The clean backend exposes public people/listing cards through public_listing_details.
+  // Load from the public view first and filter on the client so small differences in
+  // airport_id, icao casing, or status wording do not make the page look empty.
+  try {
+    const data = await loadPublicListingRowsDirect();
+    const rows = (data || [])
+      .map(normalizePublicListing)
+      .filter(Boolean)
+      .filter(listing => isPublicListingStatus(listing.status));
 
-      if(error) throw error;
+    const matchingRows = rows.filter(listing => {
+      const listingIcao = String(listing.icao || listing.airport_ident || "").trim().toUpperCase();
+      const listingAirportId = String(listing.airport_id || "").trim();
+      const selectedAirportId = String(airportId || "").trim();
+      return (airportIcao && listingIcao === airportIcao) || (selectedAirportId && listingAirportId === selectedAirportId);
+    });
 
-      currentListings = (data || []).map(normalizePublicListing).filter(Boolean);
+    currentListings = matchingRows;
 
-      if(currentListings.length) {
-        console.log(`Loaded ${currentListings.length} listings for ${airportIcao}.`);
-        return;
-      }
-      console.warn(`No listings found for ${airportIcao}.`);
-    } catch(err) {
-      console.warn("public_listing_details failed, falling back to listing_airports:", err?.message || err);
+    if(currentListings.length) {
+      console.log(`Loaded ${currentListings.length} public listings for ${airportIcao || airportId}.`, currentListings);
+      return;
     }
+
+    console.warn(`No public listings matched ${airportIcao || airportId}. Loaded ${rows.length} public listings total.`, rows);
+  } catch(err) {
+    console.warn("public_listing_details failed, falling back to listing_airports:", err?.message || err);
   }
 
   const { data, error } = await sb
@@ -4898,7 +4904,9 @@ async function renderBoard() {
     const hasMx = (displayCounts.maintenance || 0) > 0;
 
     const airportSummary = currentAirport.airport_summary || `${currentAirport.airport_name || currentAirport.icao} is a local airport. Nearby Flyer shows the services currently posted here so pilots can quickly understand what is available.`;
-    const fboNames = currentAirport.fbo_names ? String(currentAirport.fbo_names).trim() : "";
+    const fboNames = Array.isArray(currentAirport.fbo_names) && currentAirport.fbo_names.length
+      ? currentAirport.fbo_names.join(" · ")
+      : "";
     const fboInfo = fboNames || currentAirport.airport_services_summary || currentAirport.fbo_summary || "FBO and airport service information coming soon.";
     const runwaySummary = currentAirport.runway_summary || "Runway information coming soon";
     const fuelInfo = currentAirport.fuel_available || "Fuel information coming soon";
@@ -5890,7 +5898,7 @@ function showAuthError(error){
     return;
   }
   if(msg.includes("error sending confirmation email") || msg.includes("testing emails") || msg.includes("verify a domain")){
-    setStatusText("authStatus", "The account code email could not be sent yet. Check Supabase SMTP/Resend settings, then try again.");
+    setStatusText("authStatus", "Supabase could not send the confirmation email yet. Finish Resend/Supabase SMTP setup, then try again.");
     return;
   }
   if(msg.includes("expired") || msg.includes("invalid")){
@@ -5949,11 +5957,16 @@ async function createAccountFromPage(event){
   if(!password || password.length < 6) return setStatusText("signupStatus", "Create a password with at least 6 characters.");
   if(authRequestInProgress) return;
 
+  const now = Date.now();
+  if(now - lastSignupSentAt < 65000){
+    return setStatusText("signupStatus", "An account code was just requested. Wait about 1 minute before trying again.");
+  }
+
   const nameParts = fullName.split(/\s+/).filter(Boolean);
   const firstName = nameParts[0] || "";
   const lastName = nameParts.slice(1).join(" ");
 
-  const profile = {
+  window.pendingSignupProfile = {
     full_name: fullName,
     name: fullName,
     display_name: fullName,
@@ -5964,42 +5977,33 @@ async function createAccountFromPage(event){
     preferred_contact: preferredContact,
     home_airport: homeAirport || undefined
   };
+  window.pendingSignupPassword = password;
+  window.pendingSignupEmail = email;
 
   authRequestInProgress = true;
   setStatusText("signupStatus", "Creating account…");
 
-  try {
-    const resp = await fetch(`${SUPABASE_URL}/functions/v1/create-account`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "apikey": SUPABASE_ANON_KEY,
-        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`
-      },
-      body: JSON.stringify({ email, password, profile })
-    });
-    const result = await resp.json();
-    if(!resp.ok && result.error){
-      authRequestInProgress = false;
-      return setStatusText("signupStatus", result.error || "Could not create account.");
+  // Use real password signup so Supabase sends the Confirm signup email.
+  // The Confirm signup template should show {{ .Token }} so the user can enter the 6-digit code here.
+  const { error } = await sb.auth.signUp({
+    email,
+    password,
+    options: {
+      data: window.pendingSignupProfile,
+      emailRedirectTo: authRedirectUrl()
     }
+  });
 
-    setStatusText("signupStatus", "Account created. Signing in…");
-    const { data, error: signInError } = await sb.auth.signInWithPassword({ email, password });
-    authRequestInProgress = false;
-    if(signInError){
-      return setStatusText("signupStatus", signInError.message || "Account created. Please log in.");
-    }
+  authRequestInProgress = false;
+  if(error) return setStatusText("signupStatus", error.message || "Could not send account code.");
 
-    currentUser = data?.user || data?.session?.user || null;
-    await ensureProfileFromAuth();
-    await refreshAuthState();
-    closeCreateAccountModal();
-    await continuePendingAuthAction();
-  } catch(err) {
-    authRequestInProgress = false;
-    setStatusText("signupStatus", err?.message || "Account creation failed. Please try again.");
-  }
+  lastSignupSentAt = Date.now();
+  const confirmSection = document.getElementById("signupConfirmSection");
+  const confirmEmail = document.getElementById("signupConfirmEmail");
+  if(confirmEmail) confirmEmail.value = email;
+  if(confirmSection) confirmSection.style.display = "block";
+
+  setStatusText("signupStatus", "Account created. Check your email for the 6-digit confirmation code, then enter it below.");
 }
 
 async function verifyCreateAccountCode(){
@@ -6010,7 +6014,7 @@ async function verifyCreateAccountCode(){
 
   if(!email) return setStatusText("signupStatus", "Enter your email first.");
   if(!token) return setStatusText("signupStatus", "Enter the 6-digit confirmation code.");
-  if(!password || password.length < 6) return setStatusText("signupStatus", "Password is missing. Re-enter it and send a fresh account code.");
+  if(!password || password.length < 6) return setStatusText("signupStatus", "Password is missing. Re-enter it and send a fresh code.");
   if(authRequestInProgress) return;
 
   authRequestInProgress = true;
@@ -6020,7 +6024,7 @@ async function verifyCreateAccountCode(){
 
   if(error){
     authRequestInProgress = false;
-    return setStatusText("signupStatus", error.message || "That code did not work. Use the newest account code from your email.");
+    return setStatusText("signupStatus", error.message || "That code did not work. Use the newest email code.");
   }
 
   currentUser = data?.session?.user || data?.user || null;
@@ -6041,15 +6045,6 @@ async function createEmailAccount(){
   closeAuthModal();
   openCreateAccountPage();
   setStatusText("signupStatus", "Finish the required account details to create your profile.");
-}
-
-async function sendPasswordReset(){
-  const email = cleanAuthEmail();
-  if(!email) return setStatusText("authStatus", "Enter your email address first.");
-  setStatusText("authStatus", "Sending password reset email…");
-  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: authRedirectUrl() });
-  if(error) return setStatusText("authStatus", error.message);
-  setStatusText("authStatus", "Check your inbox for a password reset link.");
 }
 
 async function sendEmailCode(){
@@ -6690,15 +6685,6 @@ sb.auth.onAuthStateChange(async (event, session) => {
   currentUser = session?.user || null;
   if(currentUser) await ensureProfileFromAuth();
   await refreshAuthState();
-  if(event === "PASSWORD_RECOVERY") {
-    const newPass = prompt("Enter your new password (at least 6 characters):");
-    if(newPass && newPass.length >= 6) {
-      const { error } = await sb.auth.updateUser({ password: newPass });
-      if(error) alert("Password update failed: " + error.message);
-      else alert("Password updated! You are now signed in.");
-    }
-    return;
-  }
   if(currentUser && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION")) {
     closeAuthModal();
     await continuePendingAuthAction();
