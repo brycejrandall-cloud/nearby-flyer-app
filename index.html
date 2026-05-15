@@ -3525,7 +3525,9 @@ const MAPBOX_TOKEN = "pk.eyJ1IjoiYnJ5Y2VndWluIiwiYSI6ImNtcDRwcnNlNDE0bWsycm9vYzl
 
 const SUPABASE_URL = "https://sohwejfsccmfsbectjif.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_9n31Q6FBbpIB_nyJhBz_pw_OhT-sO-o";
-const APP_URL = `${window.location.origin}${window.location.pathname.replace(/\/[^\/]*$/, "/")}`;
+const APP_URL = window.location.protocol === "file:"
+  ? "https://nearbyflyer.com/"
+  : `${window.location.origin}${window.location.pathname.replace(/\/[^\/]*$/, "/")}`;
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
@@ -3551,6 +3553,7 @@ let markerElements = [];
 let userMarker = null;
 let airports = [];
 let filteredAirports = [];
+let airportLoadFinished = false;
 let airportAircraftIndex = {};
 let listingAircraftIndex = {};
 let airportAircraftListingMeta = {};
@@ -3569,37 +3572,108 @@ const fallbackCoords = {
   KCHD: [-111.8111, 33.2691],
   KFFZ: [-111.7283, 33.4608],
   KBXK: [-112.6862, 33.4204],
-  P52: [-112.0350, 34.7300],
-  KIGM: [-113.9380, 35.2595],
-  KSZT: [-116.5600, 48.2995],
-  KSDL: [-111.9105, 33.6229]
+  P52: [-112.0352, 34.7297]
 };
 
 function getFallbackAirports(){
-  return Object.entries(fallbackCoords).map(([icao, coords]) => ({
-    icao,
-    airport_name: {
-      KDVT: "Deer Valley",
-      KGEU: "Glendale Municipal",
-      KCHD: "Chandler Municipal",
-      KFFZ: "Falcon Field",
-      KBXK: "Buckeye Municipal",
-      P52: "Cottonwood",
-      KIGM: "Kingman",
-      KSZT: "Sandpoint",
-      KSDL: "Scottsdale"
-    }[icao] || icao,
-    city: "",
-    state: "",
-    longitude: coords[0],
-    latitude: coords[1],
-    cfi_count: 0,
-    school_count: 0,
-    rental_count: 0,
-    club_count: 0,
-    maintenance_count: 0,
-    _fallback: true
-  }));
+  return [
+    {
+      airport_id: "9099f77b-a0b7-4c37-95e1-1559b716b857",
+      icao: "KBXK",
+      airport_name: "Buckeye Municipal",
+      city: "Buckeye",
+      state: "AZ",
+      longitude: -112.6862,
+      latitude: 33.4204,
+      cfi_count: 0,
+      school_count: 0,
+      rental_count: 0,
+      club_count: 1,
+      maintenance_count: 0,
+      listing_preview: "Hometown Flying Club",
+      _fallback: true
+    },
+    {
+      airport_id: "f1ce674f-1a0a-4577-a908-6049be744c1e",
+      icao: "KCHD",
+      airport_name: "Chandler Municipal Airport",
+      city: "Chandler",
+      state: "AZ",
+      longitude: -111.8111,
+      latitude: 33.2691,
+      cfi_count: 1,
+      school_count: 0,
+      rental_count: 0,
+      club_count: 0,
+      maintenance_count: 0,
+      listing_preview: "Adler Nelsen",
+      _fallback: true
+    },
+    {
+      airport_id: "830e1f57-476a-4507-8ffe-30923e672a10",
+      icao: "KDVT",
+      airport_name: "Phoenix Deer Valley Airport",
+      city: "Phoenix",
+      state: "AZ",
+      longitude: -112.0825,
+      latitude: 33.6883,
+      cfi_count: 3,
+      school_count: 0,
+      rental_count: 0,
+      club_count: 1,
+      maintenance_count: 0,
+      listing_preview: "Cody Benson, Ethan Evans, Hometown Flying Club, Patrick Keith",
+      _fallback: true
+    },
+    {
+      airport_id: "2be9f7db-691c-4223-8223-54570df25c0a",
+      icao: "KFFZ",
+      airport_name: "Falcon Field Airport",
+      city: "Mesa",
+      state: "AZ",
+      longitude: -111.7283,
+      latitude: 33.4608,
+      cfi_count: 3,
+      school_count: 0,
+      rental_count: 0,
+      club_count: 0,
+      maintenance_count: 0,
+      listing_preview: "Cody Benson, Ethan Evans, Silas Klink",
+      _fallback: true
+    },
+    {
+      airport_id: "551f50c8-1393-4728-9e00-4a514bd00c5d",
+      icao: "KGEU",
+      airport_name: "Glendale Municipal Airport",
+      city: "Glendale",
+      state: "AZ",
+      longitude: -112.2951,
+      latitude: 33.5269,
+      cfi_count: 1,
+      school_count: 0,
+      rental_count: 0,
+      club_count: 0,
+      maintenance_count: 0,
+      listing_preview: "Johnnie Stout",
+      _fallback: true
+    },
+    {
+      airport_id: "64f52f18-68f3-40b2-aa87-c95516267bde",
+      icao: "P52",
+      airport_name: "Cottonwood Airport",
+      city: "Cottonwood",
+      state: "AZ",
+      longitude: -112.0352,
+      latitude: 34.7297,
+      cfi_count: 0,
+      school_count: 0,
+      rental_count: 0,
+      club_count: 0,
+      maintenance_count: 1,
+      listing_preview: "Verde Aviation",
+      _fallback: true
+    }
+  ];
 }
 
 function hasLiveAirportRows(){
@@ -3724,6 +3798,81 @@ function attachListingPreviewsToAirports(markerRows, previewIndex){
   });
 }
 
+function countListingsByAirport(listings){
+  const byAirport = {};
+  (listings || []).map(normalizePublicListing).filter(row => isPublicListingStatus(row.status)).forEach(row => {
+    const code = String(row.icao || row.airport_icao || row.airport_ident || "").toUpperCase();
+    if(!code) return;
+    if(!byAirport[code]){
+      byAirport[code] = {
+        cfi_count: 0,
+        school_count: 0,
+        rental_count: 0,
+        club_count: 0,
+        maintenance_count: 0,
+        listing_preview: [],
+        cfi_names: [],
+        club_names: []
+      };
+    }
+
+    const bucket = byAirport[code];
+    const type = normalizeListingType(row);
+    const label = getListingDisplayName(row);
+    if(label && !bucket.listing_preview.includes(label)) bucket.listing_preview.push(label);
+    if(type === "cfi"){
+      bucket.cfi_count += 1;
+      if(label && !bucket.cfi_names.includes(label)) bucket.cfi_names.push(label);
+    } else if(type === "flight_school") {
+      bucket.school_count += 1;
+    } else if(type === "rental_aircraft") {
+      bucket.rental_count += 1;
+    } else if(type === "flying_club") {
+      bucket.club_count += 1;
+      if(label && !bucket.club_names.includes(label)) bucket.club_names.push(label);
+    } else if(type === "maintenance") {
+      bucket.maintenance_count += 1;
+    }
+  });
+  return byAirport;
+}
+
+async function loadAirportRowsFromBaseTables(){
+  const [airportResult, listingResult] = await Promise.all([
+    sb.from("airports")
+      .select("id, ident, icao, name, airport_name, city, state, latitude, longitude")
+      .order("icao", { ascending: true }),
+    sb.from("public_listing_details")
+      .select("id,icao,airport_ident,category,listing_type,status,title,display_name,business_name,contact_name")
+  ]);
+
+  if(airportResult.error) throw airportResult.error;
+  if(listingResult.error) throw listingResult.error;
+
+  const counts = countListingsByAirport(listingResult.data || []);
+  return (airportResult.data || []).map(row => {
+    const code = String(row.icao || row.ident || "").toUpperCase();
+    const airportCounts = counts[code] || {};
+    return {
+      airport_id: row.id,
+      icao: code,
+      airport_name: row.airport_name || row.name || code,
+      city: row.city || "",
+      state: row.state || "",
+      latitude: row.latitude,
+      longitude: row.longitude,
+      cfi_count: airportCounts.cfi_count || 0,
+      school_count: airportCounts.school_count || 0,
+      rental_count: airportCounts.rental_count || 0,
+      club_count: airportCounts.club_count || 0,
+      maintenance_count: airportCounts.maintenance_count || 0,
+      listing_preview: (airportCounts.listing_preview || []).slice(0, 4).join(", "),
+      cfi_names: (airportCounts.cfi_names || []).join(", "),
+      club_names: (airportCounts.club_names || []).join(", ")
+    };
+  });
+}
+
 function setStatus(msg) {
   document.getElementById("statusBox").textContent = msg;
 }
@@ -3780,6 +3929,7 @@ function updateMarkerScale() {
 async function loadAirports() {
   if(!map) return;
 
+  airportLoadFinished = false;
   setStatus("Loading airport boards from Supabase…");
 
   let data = [];
@@ -3804,14 +3954,29 @@ async function loadAirports() {
 
   const previewIndex = await loadMapListingPreviewIndex();
   const enrichedRows = attachListingPreviewsToAirports(data || [], previewIndex);
-  const rowsWithCoords = enrichedRows.filter(a => getCoords(a));
+  let rowsWithCoords = enrichedRows.filter(a => getCoords(a));
+
+  if(!rowsWithCoords.length){
+    try {
+      const baseRows = await loadAirportRowsFromBaseTables();
+      rowsWithCoords = baseRows.filter(a => getCoords(a));
+      if(rowsWithCoords.length){
+        console.warn("Loaded airport boards from base tables because airport_map_markers was unavailable.");
+      }
+    } catch(baseError) {
+      console.warn("Base airport/listing load failed, using fallback airport bubbles if needed:", baseError.message || baseError);
+    }
+  }
+
   airports = rowsWithCoords.length ? rowsWithCoords : getFallbackAirports();
 
   await loadAirportAircraftIndex();
   await loadAircraftSearchOptions();
   filteredAirports = [...airports];
 
-  if(error && !rowsWithCoords.length) {
+  if(error && rowsWithCoords.length) {
+    setStatus(`Loaded ${airports.length} airport boards from Supabase. Use the filters to narrow the map.`);
+  } else if(error && !rowsWithCoords.length) {
     setStatus(`Showing ${airports.length} fallback airport bubbles. Supabase view issue: ${error.message || error}`);
   } else if(!rowsWithCoords.length) {
     setStatus(`Showing ${airports.length} fallback airport bubbles while the live directory is empty.`);
@@ -3833,6 +3998,8 @@ async function loadAirports() {
   if(airports.length && !currentAirport) {
     renderNoAirportSelected();
   }
+
+  airportLoadFinished = true;
 }
 
 function getCoords(a) {
@@ -6325,6 +6492,7 @@ sb.auth.onAuthStateChange(async (event, session) => {
 window.signOut = signOut;
 initMap();
 setTimeout(() => {
+  if(!airportLoadFinished) return;
   if(map && markers.length === 0 && !hasLiveAirportRows()) {
     forceFallbackAirportBubbles("Emergency release fallback loaded because no map bubbles rendered.");
   } else if(map && markers.length === 0 && hasLiveAirportRows()) {
