@@ -3285,11 +3285,11 @@ body.admin-user #adminBtn{
       <div class="mvp-head">
         <button class="mvp-close" onclick="closeCreateAccountModal()">×</button>
         <h2>Create your account.</h2>
-        <p>Accounts are required for posting so every listing has a real owner and contact info.</p>
+        <p>Accounts are required for posting. Nearby Flyer sends a 6-digit email code to confirm your account.</p>
       </div>
       <div class="mvp-body auth-page-body">
         <form onsubmit="createAccountFromPage(event)">
-          <div class="form-note">Name and email are required. This info is saved to your profile and can prefill future listings, claims, and contact cards.</div>
+          <div class="form-note">Name and email are required. After you create the account, check your email for a 6-digit confirmation code and enter it below.</div>
           <div class="form-grid">
             <div class="form-field"><label>Full Name <span class="required-star">*</span></label><input id="signupName" autocomplete="name" placeholder="Your name" required></div>
             <div class="form-field"><label>Email <span class="required-star">*</span></label><input id="signupEmail" type="email" autocomplete="email" placeholder="you@example.com" required></div>
@@ -3299,11 +3299,11 @@ body.admin-user #adminBtn{
             <div class="form-field"><label>Preferred Contact</label><select id="signupPreferredContact"><option value="email">Email</option><option value="phone">Phone / text</option></select></div>
           </div>
           <div class="auth-simple-actions">
-            <button class="btn primary" type="submit" id="createAccountSendCodeBtn">Create account</button>
+            <button class="btn primary" type="submit" id="createAccountSendCodeBtn">Send account code</button>
             <button class="btn ghost" type="button" onclick="openLoginPage()">Already have an account? Log in</button>
           </div>
           <div class="phone-code-section" id="signupConfirmSection" style="display:none">
-            <div class="form-note">Enter the 6-digit confirmation code from your email. Do not click the email link while testing locally.</div>
+            <div class="form-note">Enter the 6-digit confirmation code from your email. Use the newest code if you requested more than one.</div>
             <div class="form-grid">
               <div class="form-field"><label>Confirmation Code</label><input id="signupEmailCode" placeholder="123456" inputmode="numeric" autocomplete="one-time-code"></div>
               <div class="form-field"><label>Email</label><input id="signupConfirmEmail" type="email" placeholder="you@example.com" readonly></div>
@@ -5834,7 +5834,7 @@ function showAuthError(error){
     return;
   }
   if(msg.includes("error sending confirmation email") || msg.includes("testing emails") || msg.includes("verify a domain")){
-    setStatusText("authStatus", "Supabase could not send the confirmation email yet. Finish Resend/Supabase SMTP setup, then try again.");
+    setStatusText("authStatus", "The account code email could not be sent yet. Check Supabase SMTP/Resend settings, then try again.");
     return;
   }
   if(msg.includes("expired") || msg.includes("invalid")){
@@ -5917,7 +5917,7 @@ async function createAccountFromPage(event){
   window.pendingSignupEmail = email;
 
   authRequestInProgress = true;
-  setStatusText("signupStatus", "Creating account…");
+  setStatusText("signupStatus", "Sending account code…");
 
   // Use real password signup so Supabase sends the Confirm signup email.
   // The Confirm signup template should show {{ .Token }} so the user can enter the 6-digit code here.
@@ -5939,7 +5939,7 @@ async function createAccountFromPage(event){
   if(confirmEmail) confirmEmail.value = email;
   if(confirmSection) confirmSection.style.display = "block";
 
-  setStatusText("signupStatus", "Account created. Check your email for the 6-digit confirmation code, then enter it below.");
+  setStatusText("signupStatus", "Account code sent. Check your email for the 6-digit confirmation code, then enter it below.");
 }
 
 async function verifyCreateAccountCode(){
@@ -5950,7 +5950,7 @@ async function verifyCreateAccountCode(){
 
   if(!email) return setStatusText("signupStatus", "Enter your email first.");
   if(!token) return setStatusText("signupStatus", "Enter the 6-digit confirmation code.");
-  if(!password || password.length < 6) return setStatusText("signupStatus", "Password is missing. Re-enter it and send a fresh code.");
+  if(!password || password.length < 6) return setStatusText("signupStatus", "Password is missing. Re-enter it and send a fresh account code.");
   if(authRequestInProgress) return;
 
   authRequestInProgress = true;
@@ -5960,7 +5960,7 @@ async function verifyCreateAccountCode(){
 
   if(error){
     authRequestInProgress = false;
-    return setStatusText("signupStatus", error.message || "That code did not work. Use the newest email code.");
+    return setStatusText("signupStatus", error.message || "That code did not work. Use the newest account code from your email.");
   }
 
   currentUser = data?.session?.user || data?.user || null;
