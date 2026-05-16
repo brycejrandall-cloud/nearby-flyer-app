@@ -3308,7 +3308,6 @@ body.admin-user #adminBtn{
           <div class="auth-simple-actions">
             <button class="btn primary" type="button" id="signInBtn" onclick="signInWithEmail()">Log In</button>
             <button class="btn ghost" type="button" onclick="openCreateAccountPage()">Create Account</button>
-            <button class="btn ghost" type="button" onclick="sendPasswordReset()" style="font-size:13px;padding:8px 14px">Forgot password?</button>
           </div>
           <div id="phoneAuthFields" style="display:none">
             <input id="authPhone" placeholder="+14805551234">
@@ -3325,11 +3324,11 @@ body.admin-user #adminBtn{
       <div class="mvp-head">
         <button class="mvp-close" onclick="closeCreateAccountModal()">×</button>
         <h2>Create your account.</h2>
-        <p>Accounts are required for posting and claiming listings.</p>
+        <p>Accounts are required for posting so every listing has a real owner and contact info.</p>
       </div>
       <div class="mvp-body auth-page-body">
         <form onsubmit="createAccountFromPage(event)">
-          <div class="form-note">Name, email, and password are required. If email confirmation is on, use the link in your inbox, then log in.</div>
+          <div class="form-note">Name and email are required. This info is saved to your profile and can prefill future listings, claims, and contact cards.</div>
           <div class="form-grid">
             <div class="form-field"><label>Full Name <span class="required-star">*</span></label><input id="signupName" autocomplete="name" placeholder="Your name" required></div>
             <div class="form-field"><label>Email <span class="required-star">*</span></label><input id="signupEmail" type="email" autocomplete="email" placeholder="you@example.com" required></div>
@@ -3343,7 +3342,7 @@ body.admin-user #adminBtn{
             <button class="btn ghost" type="button" onclick="openLoginPage()">Already have an account? Log in</button>
           </div>
           <div class="phone-code-section" id="signupConfirmSection" style="display:none">
-            <div class="form-note">If your email contains a 6-digit code, enter it here. If it contains a confirmation link, open the link, then log in with your password.</div>
+            <div class="form-note">Enter the 6-digit confirmation code from your email. Do not click the email link while testing locally.</div>
             <div class="form-grid">
               <div class="form-field"><label>Confirmation Code</label><input id="signupEmailCode" placeholder="123456" inputmode="numeric" autocomplete="one-time-code"></div>
               <div class="form-field"><label>Email</label><input id="signupConfirmEmail" type="email" placeholder="you@example.com" readonly></div>
@@ -5708,7 +5707,6 @@ let pendingPasswordAfterEmailCode = false;
 let authRequestInProgress = false;
 let lastEmailCodeSentAt = 0;
 let lastSignupSentAt = 0;
-let passwordRecoveryMode = false;
 const ADMIN_EMAILS = ["brycejrandall@gmail.com"];
 function isAdminUser(){
   return !!(currentUser && ADMIN_EMAILS.includes(String(currentUser.email || "").toLowerCase()));
@@ -5847,7 +5845,7 @@ function setSubmitType(type){
 
 function setAuthMethod(method){
   if(method === "phone"){
-    setStatusText("authStatus", "SMS login is temporarily paused while toll-free verification is completed. Use email and password for now.");
+    setStatusText("authStatus", "SMS login is temporarily paused while toll-free verification is completed. Use Email Code for now.");
   }
   authMethod = "email";
   document.getElementById("authEmailMethod")?.classList.toggle("active", authMethod === "email");
@@ -5857,7 +5855,7 @@ function setAuthMethod(method){
   if(emailFields) emailFields.style.display = authMethod === "email" ? "block" : "none";
   if(phoneFields) phoneFields.style.display = authMethod === "phone" ? "block" : "none";
   const helper = document.getElementById("authHelperText");
-  if(helper) helper.textContent = "Use email and password. SMS login is temporarily paused while toll-free verification is completed.";
+  if(helper) helper.textContent = "Recommended: Email Code. Password sign-in works for accounts created with a password. SMS login is temporarily paused while toll-free verification is completed.";
 }
 
 function normalizePhoneNumber(raw){
@@ -5892,7 +5890,7 @@ function showAuthError(error){
     return;
   }
   if(msg.includes("invalid login credentials")){
-    setStatusText("authStatus", "Wrong email or password. Use Forgot password if you need to reset it.");
+    setStatusText("authStatus", "Wrong email or password. Use Email Code if you need to get back in.");
     return;
   }
   if(msg.includes("email not confirmed")){
@@ -5904,7 +5902,7 @@ function showAuthError(error){
     return;
   }
   if(msg.includes("expired") || msg.includes("invalid")){
-    setStatusText("authStatus", "That link or code is expired. Request a fresh password reset or confirmation email.");
+    setStatusText("authStatus", "That code or link is expired. Send one fresh email code and use the newest email.");
     return;
   }
 
@@ -5918,63 +5916,30 @@ function setAuthButtonsDisabled(disabled){
   });
 }
 
-function withTimeout(promise, ms, label){
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label || "Request"} timed out. Check your connection and try again.`)), ms);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
-
-async function syncProfileWithoutBlockingLogin(){
-  try {
-    await withTimeout(ensureProfileFromAuth(), 4000, "Profile sync");
-  } catch(err) {
-    console.warn("Profile sync skipped:", err?.message || err);
-  }
-}
-
-async function finishSignedInFlow(statusId = "authStatus"){
-  await syncProfileWithoutBlockingLogin();
-  await refreshAuthState();
-  closeAuthModal();
-  closeCreateAccountModal();
-  setStatusText(statusId, "Signed in.");
-  await continuePendingAuthAction();
-}
-
 async function signInWithEmail(){
   const email = cleanAuthEmail();
   const password = document.getElementById("authPassword")?.value;
-  if(passwordRecoveryMode) return updateRecoveredPassword();
   if(!email) return setStatusText("authStatus", "Enter your email first.");
-  if(!password) return setStatusText("authStatus", "Enter your password, or use Forgot password if you need a reset link.");
+  if(!password) return setStatusText("authStatus", "Enter your password, or use Email Code if you do not have one yet.");
   if(authRequestInProgress) return;
 
   authRequestInProgress = true;
   setAuthButtonsDisabled(true);
   setStatusText("authStatus", "Signing in…");
 
-  try {
-    const { data, error } = await withTimeout(
-      sb.auth.signInWithPassword({ email, password }),
-      12000,
-      "Login"
-    );
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
 
-    if(error) return showAuthError(error);
+  authRequestInProgress = false;
+  setAuthButtonsDisabled(false);
 
-    currentUser = data?.user || data?.session?.user || null;
-    if(!currentUser) return setStatusText("authStatus", "Login returned no session. Try again.");
+  if(error) return showAuthError(error);
 
-    setStatusText("authStatus", "Signed in.");
-    await finishSignedInFlow("authStatus");
-  } catch(err) {
-    showAuthError(err);
-  } finally {
-    authRequestInProgress = false;
-    setAuthButtonsDisabled(false);
-  }
+  currentUser = data?.user || data?.session?.user || null;
+  setStatusText("authStatus", "Signed in.");
+  await ensureProfileFromAuth();
+  await refreshAuthState();
+  closeAuthModal();
+  await continuePendingAuthAction();
 }
 
 
@@ -6020,7 +5985,7 @@ async function createAccountFromPage(event){
 
   // Use real password signup so Supabase sends the Confirm signup email.
   // The Confirm signup template should show {{ .Token }} so the user can enter the 6-digit code here.
-  const { data, error } = await sb.auth.signUp({
+  const { error } = await sb.auth.signUp({
     email,
     password,
     options: {
@@ -6032,20 +5997,13 @@ async function createAccountFromPage(event){
   authRequestInProgress = false;
   if(error) return setStatusText("signupStatus", error.message || "Could not send account code.");
 
-  currentUser = data?.session?.user || data?.user || null;
-  if(currentUser && data?.session){
-    setStatusText("signupStatus", "Account created and signed in.");
-    await finishSignedInFlow("signupStatus");
-    return;
-  }
-
   lastSignupSentAt = Date.now();
   const confirmSection = document.getElementById("signupConfirmSection");
   const confirmEmail = document.getElementById("signupConfirmEmail");
   if(confirmEmail) confirmEmail.value = email;
   if(confirmSection) confirmSection.style.display = "block";
 
-  setStatusText("signupStatus", "Account created. Check your email to confirm it, then log in with your password.");
+  setStatusText("signupStatus", "Account created. Check your email for the 6-digit confirmation code, then enter it below.");
 }
 
 async function verifyCreateAccountCode(){
@@ -6071,9 +6029,13 @@ async function verifyCreateAccountCode(){
 
   currentUser = data?.session?.user || data?.user || null;
 
+  await ensureProfileFromAuth();
+  await refreshAuthState();
+
   authRequestInProgress = false;
   setStatusText("signupStatus", "Account confirmed and signed in.");
-  await finishSignedInFlow("signupStatus");
+  closeCreateAccountModal();
+  await continuePendingAuthAction();
 }
 
 async function createEmailAccount(){
@@ -6098,64 +6060,8 @@ async function verifyEmailCode(){
   return setStatusText("authStatus", "Email-code login is disabled for now. Use email + password.");
 }
 
-async function sendPasswordReset(){
-  const email = cleanAuthEmail();
-  if(!email) return setStatusText("authStatus", "Enter your email address first.");
-  if(authRequestInProgress) return;
-  authRequestInProgress = true;
-  setAuthButtonsDisabled(true);
-  setStatusText("authStatus", "Sending password reset email…");
-  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: authRedirectUrl() });
-  authRequestInProgress = false;
-  setAuthButtonsDisabled(false);
-  if(error) return showAuthError(error);
-  setStatusText("authStatus", "Password reset sent. Check your email, then come back and log in.");
-}
-
-function enterPasswordRecoveryMode(){
-  passwordRecoveryMode = true;
-  openAuthModal();
-  const passwordInput = document.getElementById("authPassword");
-  const signInBtn = document.getElementById("signInBtn");
-  if(passwordInput) {
-    passwordInput.value = "";
-    passwordInput.placeholder = "New password";
-    passwordInput.autocomplete = "new-password";
-  }
-  if(signInBtn) signInBtn.textContent = "Update Password";
-  setStatusText("authStatus", "Enter a new password, then tap Update Password.");
-}
-
-function exitPasswordRecoveryMode(){
-  passwordRecoveryMode = false;
-  const passwordInput = document.getElementById("authPassword");
-  const signInBtn = document.getElementById("signInBtn");
-  if(passwordInput) {
-    passwordInput.value = "";
-    passwordInput.placeholder = "Your password";
-    passwordInput.autocomplete = "current-password";
-  }
-  if(signInBtn) signInBtn.textContent = "Log In";
-}
-
-async function updateRecoveredPassword(){
-  const password = document.getElementById("authPassword")?.value || "";
-  if(!password || password.length < 6) return setStatusText("authStatus", "Enter a new password with at least 6 characters.");
-  if(authRequestInProgress) return;
-  authRequestInProgress = true;
-  setAuthButtonsDisabled(true);
-  setStatusText("authStatus", "Updating password…");
-  const { error } = await sb.auth.updateUser({ password });
-  authRequestInProgress = false;
-  setAuthButtonsDisabled(false);
-  if(error) return showAuthError(error);
-  exitPasswordRecoveryMode();
-  setStatusText("authStatus", "Password updated. You are signed in.");
-  await finishSignedInFlow("authStatus");
-}
-
 async function sendPhoneCode(){
-  return setStatusText("authStatus", "SMS login is temporarily paused while toll-free verification is completed. Use email and password for now.");
+  return setStatusText("authStatus", "SMS login is temporarily paused while toll-free verification is completed. Use Email Code for now.");
   const input = document.getElementById("authPhone");
   const phone = normalizePhoneNumber(input?.value);
   if(input) input.value = phone;
@@ -6331,14 +6237,13 @@ async function signOut(){
 
 function submitAuth(event){
   event.preventDefault();
-  if(passwordRecoveryMode) return updateRecoveredPassword();
   if(authMethod === "phone"){
     const code = document.getElementById("authOtpCode")?.value.trim();
     return code ? verifyPhoneCode() : sendPhoneCode();
   }
   const password = document.getElementById("authPassword")?.value;
   if(password) return signInWithEmail();
-  return setStatusText("authStatus", "Enter your password, use Forgot password, or create an account if you are new.");
+  return setStatusText("authStatus", "Enter your password, or use Create Account if you are new.");
 }
 
 function previewSubmissionPhotos(){
@@ -6786,7 +6691,6 @@ async function handleAuthRedirectAndInitialSession(){
     const accessToken = hash.get("access_token") || query.get("access_token");
     const refreshToken = hash.get("refresh_token") || query.get("refresh_token");
     const errorDescription = hash.get("error_description") || query.get("error_description");
-    const authType = hash.get("type") || query.get("type");
 
     if(errorDescription){
       setStatusText("authStatus", decodeURIComponent(errorDescription));
@@ -6801,8 +6705,7 @@ async function handleAuthRedirectAndInitialSession(){
         currentUser = data?.session?.user || null;
         if(currentUser){
           await ensureProfileFromAuth();
-          if(authType === "recovery") enterPasswordRecoveryMode();
-          else closeAuthModal();
+          closeAuthModal();
         }
       }
       history.replaceState({}, document.title, APP_URL);
@@ -6812,8 +6715,7 @@ async function handleAuthRedirectAndInitialSession(){
     currentUser = data?.session?.user || currentUser || null;
     if(currentUser) await ensureProfileFromAuth();
     await refreshAuthState();
-    if(currentUser && authType === "recovery") enterPasswordRecoveryMode();
-    else if(currentUser) await continuePendingAuthAction();
+    if(currentUser) await continuePendingAuthAction();
   } catch(err){
     console.warn("Auth redirect handling failed", err);
     await refreshAuthState();
@@ -6824,10 +6726,6 @@ sb.auth.onAuthStateChange(async (event, session) => {
   currentUser = session?.user || null;
   if(currentUser) await ensureProfileFromAuth();
   await refreshAuthState();
-  if(event === "PASSWORD_RECOVERY") {
-    enterPasswordRecoveryMode();
-    return;
-  }
   if(currentUser && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION")) {
     closeAuthModal();
     await continuePendingAuthAction();
