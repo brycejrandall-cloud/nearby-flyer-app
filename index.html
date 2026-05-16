@@ -5916,6 +5916,14 @@ function setAuthButtonsDisabled(disabled){
   });
 }
 
+function authTimeout(promise, ms, label){
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label || "Login"} timed out. Try again.`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 async function signInWithEmail(){
   const email = cleanAuthEmail();
   const password = document.getElementById("authPassword")?.value;
@@ -5927,19 +5935,29 @@ async function signInWithEmail(){
   setAuthButtonsDisabled(true);
   setStatusText("authStatus", "Signing in…");
 
-  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  try {
+    const { data, error } = await authTimeout(
+      sb.auth.signInWithPassword({ email, password }),
+      12000,
+      "Login"
+    );
 
-  authRequestInProgress = false;
-  setAuthButtonsDisabled(false);
+    if(error) return showAuthError(error);
 
-  if(error) return showAuthError(error);
+    currentUser = data?.user || data?.session?.user || null;
+    if(!currentUser) return setStatusText("authStatus", "Login worked, but no session was returned. Try refreshing.");
 
-  currentUser = data?.user || data?.session?.user || null;
-  setStatusText("authStatus", "Signed in.");
-  await ensureProfileFromAuth();
-  await refreshAuthState();
-  closeAuthModal();
-  await continuePendingAuthAction();
+    setStatusText("authStatus", "Signed in.");
+    closeAuthModal();
+    await refreshAuthState();
+    ensureProfileFromAuth().catch(err => console.warn("Profile sync skipped:", err?.message || err));
+    await continuePendingAuthAction();
+  } catch(err) {
+    showAuthError(err);
+  } finally {
+    authRequestInProgress = false;
+    setAuthButtonsDisabled(false);
+  }
 }
 
 
