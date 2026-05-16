@@ -5918,6 +5918,31 @@ function setAuthButtonsDisabled(disabled){
   });
 }
 
+function withTimeout(promise, ms, label){
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label || "Request"} timed out. Check your connection and try again.`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+async function syncProfileWithoutBlockingLogin(){
+  try {
+    await withTimeout(ensureProfileFromAuth(), 4000, "Profile sync");
+  } catch(err) {
+    console.warn("Profile sync skipped:", err?.message || err);
+  }
+}
+
+async function finishSignedInFlow(statusId = "authStatus"){
+  await syncProfileWithoutBlockingLogin();
+  await refreshAuthState();
+  closeAuthModal();
+  closeCreateAccountModal();
+  setStatusText(statusId, "Signed in.");
+  await continuePendingAuthAction();
+}
+
 async function signInWithEmail(){
   const email = cleanAuthEmail();
   const password = document.getElementById("authPassword")?.value;
@@ -5930,19 +5955,26 @@ async function signInWithEmail(){
   setAuthButtonsDisabled(true);
   setStatusText("authStatus", "Signing in…");
 
-  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  try {
+    const { data, error } = await withTimeout(
+      sb.auth.signInWithPassword({ email, password }),
+      12000,
+      "Login"
+    );
 
-  authRequestInProgress = false;
-  setAuthButtonsDisabled(false);
+    if(error) return showAuthError(error);
 
-  if(error) return showAuthError(error);
+    currentUser = data?.user || data?.session?.user || null;
+    if(!currentUser) return setStatusText("authStatus", "Login returned no session. Try again.");
 
-  currentUser = data?.user || data?.session?.user || null;
-  setStatusText("authStatus", "Signed in.");
-  await ensureProfileFromAuth();
-  await refreshAuthState();
-  closeAuthModal();
-  await continuePendingAuthAction();
+    setStatusText("authStatus", "Signed in.");
+    await finishSignedInFlow("authStatus");
+  } catch(err) {
+    showAuthError(err);
+  } finally {
+    authRequestInProgress = false;
+    setAuthButtonsDisabled(false);
+  }
 }
 
 
@@ -6002,11 +6034,8 @@ async function createAccountFromPage(event){
 
   currentUser = data?.session?.user || data?.user || null;
   if(currentUser && data?.session){
-    await ensureProfileFromAuth();
-    await refreshAuthState();
     setStatusText("signupStatus", "Account created and signed in.");
-    closeCreateAccountModal();
-    await continuePendingAuthAction();
+    await finishSignedInFlow("signupStatus");
     return;
   }
 
@@ -6042,13 +6071,9 @@ async function verifyCreateAccountCode(){
 
   currentUser = data?.session?.user || data?.user || null;
 
-  await ensureProfileFromAuth();
-  await refreshAuthState();
-
   authRequestInProgress = false;
   setStatusText("signupStatus", "Account confirmed and signed in.");
-  closeCreateAccountModal();
-  await continuePendingAuthAction();
+  await finishSignedInFlow("signupStatus");
 }
 
 async function createEmailAccount(){
@@ -6125,10 +6150,8 @@ async function updateRecoveredPassword(){
   setAuthButtonsDisabled(false);
   if(error) return showAuthError(error);
   exitPasswordRecoveryMode();
-  await refreshAuthState();
   setStatusText("authStatus", "Password updated. You are signed in.");
-  closeAuthModal();
-  await continuePendingAuthAction();
+  await finishSignedInFlow("authStatus");
 }
 
 async function sendPhoneCode(){
